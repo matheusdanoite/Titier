@@ -11,7 +11,7 @@
 ## ✨ Funcionalidades
 
 - **🔒 100% Local (Privacidade Total):** Seus documentos e conversas nunca saem do seu computador.
-- **🧠 IA Multimodal:** Entende texto, tabelas, gráficos e anotações manuscritas (OCR inteligente com MiniCPM-V 2.6).
+- **🧠 IA Multimodal:** Entende texto, tabelas, gráficos e anotações manuscritas.
 - **📚 RAG (Retrieval-Augmented Generation):** Respostas baseadas fielmente no conteúdo dos seus PDFs.
 - **⚡ Performance Nativa:** Backend em Python otimizado (Metal/CUDA) + Frontend leve em Rust/Tauri.
 
