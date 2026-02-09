@@ -1,6 +1,6 @@
 // Titier - Tauri Backend Management
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::State;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild;
 
@@ -72,7 +72,7 @@ pub fn run() {
                     
                     if let Err(e) = handle.shell()
                         .sidecar("titier-backend")
-                        .and_then(|cmd| cmd.spawn().map_err(|e| tauri_plugin_shell::Error::Io(e.into())))
+                        .and_then(|cmd| cmd.spawn())
                     {
                         eprintln!("Erro ao iniciar backend: {:?}", e);
                     }
