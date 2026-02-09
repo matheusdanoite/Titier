@@ -5,6 +5,34 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-09
+
+### Adicionado
+- **Chat Multi-Sessão:** Suporte a múltiplas conversas simultâneas com contextos independentes.
+- **Streaming de Tokens:** Respostas da LLM são exibidas token a token em tempo real.
+- **Componente `ChatSession.tsx`:** Novo componente encapsulado para gerenciamento de sessões de chat individuais.
+- **Componente `SidebarMenu.tsx`:** Menu lateral para criar, selecionar e excluir sessões de chat.
+- **Endpoint `/chat/stream`:** Nova API de streaming via Server-Sent Events (SSE).
+- **Gestão Dinâmica de Contexto:** O sistema calcula automaticamente os tokens disponíveis e ajusta `max_tokens` para evitar estouro de memória.
+- **ErrorBoundary:** Tratamento global de erros no frontend para evitar travamentos.
+
+### Alterado
+- **Janela de Contexto Otimizada:** `n_ctx` definido para 8192 tokens (estável para hardware local).
+- **RAG Otimizado:** 
+  - Tamanho de chunks reduzido de 500 para 200 palavras.
+  - Overlap reduzido de 50 para 30 palavras.
+  - Limite de recuperação reduzido de 5 para 3 chunks.
+- **`max_tokens` padrão:** Aumentado para 4096 tokens para respostas mais completas.
+- **Refatoração de `App.tsx`:** Arquitetura de estado para suportar múltiplas sessões ativas.
+
+### Corrigido
+- Erro `ValueError: Requested tokens exceed context window` ao processar documentos grandes.
+- Travamento do sistema ao tentar usar contexto completo do modelo (128k tokens).
+- Truncamento prematuro de respostas da LLM.
+- `ReferenceError: FileText` no frontend.
+
+---
+
 ## [0.3.0] - 2026-02-09
 
 ### Adicionado

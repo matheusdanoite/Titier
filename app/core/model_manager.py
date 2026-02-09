@@ -69,6 +69,16 @@ RECOMMENDED_MODELS = [
         "vram_required": 8,
         "description": "Modelo multimodal para OCR e análise de imagens",
         "is_vision": True
+    },
+    {
+        "id": "paddleocr-vl-1.5",
+        "name": "PaddleOCR-VL 1.5",
+        "repo": "nclssprt/PaddleOCR-VL-GGUF",
+        "filename": "paddleocr-vl-0.9b.gguf",
+        "size_gb": 0.94,
+        "vram_required": 2,
+        "description": "Modelo otimizado pela Baidu, mestre em extrair textos de documentos, tabelas e imagens complexas com precisão.",
+        "is_vision": True
     }
 ]
 
@@ -110,7 +120,7 @@ class ModelManager:
         self.model_cache = {}
 
     def _estimate_specs(self, model_id: str, filename: str) -> tuple[float, float]:
-        """Estima tamanho e VRAM baseada no nome/ID do modelo."""
+        """Estima tamanho e VRAM baseada no nome/ID do modelo com mais precisão."""
         try:
             import re
             
@@ -131,125 +141,78 @@ class ModelManager:
                     # Fallback para nomes comuns conhecidos
                     if "llama-3" in text: params = 8
                     elif "mistral" in text: params = 7
-                    elif "gemma" in text: params = 2 # gemma padrão é 2b ou 7b, assumir menor
+                    elif "gemma" in text: params = 2
                     elif "qwen" in text: params = 7
                     elif "phi" in text: params = 3
-                    elif "glm" in text: params = 9 # GLM-4 costuma ser 9B
-                    elif "stories" in text: params = 0.1 # muito pequeno
+                    elif "glm" in text: params = 9
+                    elif "stories" in text: params = 0.1
                     else: return 0.0, 0.0
 
             # Tentar extrair bits da quantização (ex: Q4, Q5, Q8, F16)
             fname = filename.lower()
-            if "q4" in fname: bits = 4.5
+            if "q4_k_m" in fname: bits = 4.8 # Q4_K_M é ligeiramente maior que Q4_0
+            elif "q4_0" in fname: bits = 4.5
+            elif "q4" in fname: bits = 4.5
             elif "q5" in fname: bits = 5.5
             elif "q6" in fname: bits = 6.5
             elif "q8" in fname: bits = 8.5
             elif "f16" in fname: bits = 16
             elif "f32" in fname: bits = 32
-            elif "iq" in fname: bits = 4 # i-quants (ex: IQ4_XS) costumam ser < 4 bits reais, assumir 4
+            elif "iq" in fname: bits = 4
             else: bits = 5 # fallback seguro
             
             # Tamanho do arquivo em GB = (Params * Bits) / 8
             size_gb = (params * bits) / 8
             
-            # VRAM = Tamanho + Contexto (estimativa conservadora +20%)
-            vram_gb = size_gb * 1.2
+            # VRAM = Tamanho + Contexto (overhead de ~1-2GB para contexto de 8k-32k)
+            # Para modelos pequenos, o overhead é percentualmente maior
+            vram_gb = size_gb + max(1.0, size_gb * 0.1)
             
             return round(size_gb, 1), round(vram_gb, 1)
             
         except Exception:
             return 0.0, 0.0
 
-    def search_models(self, query: str) -> list[dict]:
-        """Busca modelos específicos no HF, filtrando por hardware."""
-        print(f"[ModelManager] Buscando por '{query}'...")
-        system_ram = self.get_system_ram()
-        # Permitir usar até 80-90% da RAM para não travar o sistema
-        # Mas sendo conservador: RAM Total - 2GB (OS)
-        max_usable_ram = max(2.0, system_ram - 2.0)
-        
-        try:
-             models = self._hf_api.list_models(
-                search=query,
-                filter="gguf",
-                sort="downloads",
-                limit=50 # Buscar mais para poder filtrar
-            )
-             
-             results = []
-             for base_model in models:
-                try:
-                    # Fetch details for siblings
-                    model = self._hf_api.model_info(base_model.modelId)
-                    
-                    if not model.siblings:
-                        continue
-
-                    siblings = [f.rfilename for f in model.siblings if f.rfilename.endswith(".gguf")]
-                    if not siblings: continue
-                    
-                    # Priorizar Q4_K_M -> Q4_0 -> Qualquer um
-                    best_quant = next((f for f in siblings if "Q4_K_M" in f), 
-                                    next((f for f in siblings if "Q4_0" in f), siblings[0]))
-                    
-                    estimated_size, estimated_vram = self._estimate_specs(model.modelId, best_quant)
-                    
-                    # FILTRAGEM DE HARDWARE
-                    # Se não conseguimos estimar (0.0), mostramos por precaução (ou escondemos?)
-                    # O usuário pediu para excluir os que excedem.
-                    # Vamos excluir apenas se tivermos uma estimativa alta confiável > max_usable_ram
-                    # Se for 0.0 (desconhecido), deixamos passar com m aviso visual (frontend lida ou mostra 0)
-                    if estimated_vram > max_usable_ram:
-                         continue
-                    
-                    results.append({
-                        "id": model.modelId.replace("/", "__"),
-                        "name": model.modelId.split("/")[-1],
-                        "repo": model.modelId,
-                        "filename": best_quant,
-                        "size_gb": estimated_size,
-                        "vram_required": estimated_vram,
-                        "description": f"Resultado da busca - {model.downloads} downloads",
-                        "downloads": model.downloads,
-                        "url": f"https://huggingface.co/{model.modelId}"
-                    })
-                except Exception as e:
-                    print(f"Error searching {base_model.modelId}: {e}")
-                    pass
-
-                
-             return results[:10] # Retornar top 10 filtrados
-        except Exception as e:
-            print(f"Erro na busca: {e}")
-            return []
     def discover_models(self) -> list[dict]:
         """Descobre modelos GGUF populares no Hugging Face compatíveis com o hardware."""
         system_ram = self.get_system_ram()
-        available_target = max(2, system_ram - 2)
+        # Margem de segurança mais dinâmica
+        available_target = max(1.5, system_ram - (2.5 if system_ram > 8 else 1.5))
         
-        print(f"[ModelManager] Buscando modelos GGUF populares (RAM alvo: {available_target:.1f}GB)...")
+        print(f"[ModelManager] Buscando modelos GGUF (RAM disponível estimada: {available_target:.1f}GB)...")
         
         try:
-            # Reduzir limite pois faremos chamadas n+1
+            # Lista de modelos populares GGUF
             models = self._hf_api.list_models(
                 filter=["gguf", "text-generation"],
                 sort="downloads",
-                limit=50
+                limit=60 # Pegar margem para diversidade
             )
             
             discovered = []
+            seen_families = set()
+            
+            # Autores preferidos (comunidade de quantização de alta qualidade)
+            priority_authors = ["bartowski", "MaziyarPanahi", "mradermacher", "lmstudio-community", "QuantFactory", "LoneStriker"]
             
             for base_model in models:
                 try:
-                    # Precisamos de detalhes para ver os arquivos (siblings)
-                    # Isso adiciona latência, mas é necessário
-                    model = self._hf_api.model_info(base_model.modelId)
+                    # Evitar duplicar a mesma família de modelo (ex: não mostrar 5 variações do Qwen 2.5 7B)
+                    # Heurística: extrair o nome base (ex: Qwen2.5-7B-Instruct)
+                    model_id = base_model.modelId
+                    family_parts = model_id.split("/")[-1].split("-")
+                    # Pegar os primeiros 3-4 termos para identificar a família
+                    family = "-".join(family_parts[:min(len(family_parts), 3)]).lower()
                     
-                    # Pular modelos de visão por enquanto (foco em chat)
-                    if model.tags and ("vision" in model.tags or "clip" in model.tags):
+                    if family in seen_families and len(discovered) < 8:
                         continue
                     
-                    # Análise rápida do repo para achar arquivos GGUF
+                    model = self._hf_api.model_info(model_id)
+                    
+                    # Pular modelos de visão por enquanto (conforme feedback do usuário)
+                    if model.tags and ("vision" in model.tags or "clip" in model.tags or "multimodal" in model.tags):
+                        continue
+                    
                     if not model.siblings:
                          continue
 
@@ -257,91 +220,217 @@ class ModelManager:
                     if not siblings:
                         continue
                         
-                    # Tentar achar a melhor quantização (Q4_K_M é o sweet spot)
+                    # Tentar achar a melhor quantização
                     best_quant = next((f for f in siblings if "Q4_K_M" in f), None)
                     if not best_quant:
                         best_quant = next((f for f in siblings if "Q4_0" in f), None)
                     if not best_quant:
-                        best_quant = siblings[0] # Fallback
-                        
-                    # Estimar tamanho (aproximado pelo nome ou metadados se possível)
-                    # Como list_models não retorna tamanho do arquivo, teríamos que fazer uma request extra
-                    # Para otimizar, vamos assumir que modelos < 10B params cabem se quantizados
-                    # Uma verificação real exigiria list_repo_tree o que é lento para muitos modelos
-                    
-                    # Filtro heurístico pelo nome
-                    name_lower = model.modelId.lower()
+                        best_quant = siblings[0]
                             
-                    estimated_size, estimated_vram = self._estimate_specs(model.modelId, best_quant)
+                    estimated_size, estimated_vram = self._estimate_specs(model_id, best_quant)
 
-                    # Filtragem Hard HARDWARE: Se soubermos que não cabe, não mostrar.
-                    if estimated_vram > available_target:
+                    # Filtragem Hard HARDWARE
+                    if estimated_vram > available_target and estimated_vram > 0:
                         continue
 
-                    # Filtro de Qualidade: Ignorar modelos muito pequenos (< 3GB RAM) para casos de uso sérios
-                    if estimated_vram < 3.0:
+                    # Filtro de Qualidade: Ignorar modelos irrelevantes ou mal catalogados
+                    if model.downloads < 100:
                         continue
 
+                    # Bônus de Idioma/Qualidade
+                    score_bonus = 1.0
+                    tags_str = " ".join(model.tags) if model.tags else ""
+                    if "pt" in tags_str or "portuguese" in tags_str.lower() or "multilingual" in tags_str.lower():
+                        score_bonus *= 1.5
+                    
+                    author = model_id.split("/")[0]
+                    if author in priority_authors:
+                        score_bonus *= 1.3
+
+                    # Recalcular score
+                    age_days = (datetime.now(timezone.utc) - model.created_at).days
+                    recency = max(7, age_days) # Pelo menos 1 semana para estabilizar
+                    score = (model.downloads / recency) * score_bonus
+                    
                     model_data = {
-                        "id": model.modelId.replace("/", "__"),
-                        "name": model.modelId.split("/")[-1],
-                        "repo": model.modelId,
+                        "id": model_id.replace("/", "__"),
+                        "name": model_id.split("/")[-1],
+                        "repo": model_id,
                         "filename": best_quant,
                         "size_gb": estimated_size,
                         "vram_required": estimated_vram,
-                        "description": f"Downloads: {model.downloads}",
+                        "description": f"Downloads: {model.downloads:,}".replace(",", "."),
                         "downloads": model.downloads,
-                        "createdAt": model.created_at,
-                        "url": f"https://huggingface.co/{model.modelId}"
+                        "score": score,
+                        "url": f"https://huggingface.co/{model_id}",
+                        "installed": (self.model_dir / best_quant).exists()
                     }
                     
                     self.model_cache[model_data["id"]] = model_data
                     discovered.append(model_data)
+                    seen_families.add(family)
                     
-                    if len(discovered) >= 12:
+                    if len(discovered) >= 15: # Pegar um pouco mais para ordenar final
                         break
                         
                 except Exception:
                     continue
 
-            
-            # Recalcular score para ordenar melhor
-            # Usar a mesma lógica de recência
-            for d in discovered:
-                 # Injetar dados simulados para nossa formula de score
-                 age_days = (datetime.now(timezone.utc) - d["createdAt"]).days
-                 recency = max(1, age_days + 30)
-                 score = (d["downloads"] * 2) / recency # Simplificado sem likes
-                 d["score"] = score
-                 
             discovered.sort(key=lambda x: x["score"], reverse=True)
-            
-            # Marcar o top 1 como recomendado (REMOVIDO a pedido do usuário)
-            # if discovered:
-            #     discovered[0]["recommended"] = True
-            #     discovered[0]["recommendation_reason"] = "Tendência no Hugging Face e compatível com seu perfil."
-            
-            return discovered
+            return discovered[:12] # Top 12 final
             
         except Exception as e:
             print(f"[ModelManager] Erro na descoberta: {e}")
             return []
 
-    def search_models(self, query: str) -> list[dict]:
-        """Busca modelos específicos no HF."""
-        print(f"[ModelManager] Buscando por '{query}'...")
+    def discover_ocr_models(self) -> list[dict]:
+        """Descobre modelos de visão/OCR compatíveis."""
+        system_ram = self.get_system_ram()
+        available_target = max(1.5, system_ram - 1.5)
+        
+        print(f"[ModelManager] Buscando modelos OCR (RAM disponível estimada: {available_target:.1f}GB)...")
+        
+        try:
+            # Busca específica por visão e multimodais
+            models = self._hf_api.list_models(
+                filter=["gguf", "image-text-to-text"],
+                sort="downloads",
+                limit=40
+            )
+            
+            discovered = []
+            for base_model in models:
+                try:
+                    model_id = base_model.modelId
+                    model = self._hf_api.model_info(model_id)
+                    
+                    # Verificar se é realmente de visão/multimodal
+                    tags_str = " ".join(model.tags) if model.tags else ""
+                    is_ocr = any(x in tags_str.lower() or x in model_id.lower() for x in ["ocr", "vision", "multimodal", "vl", "minicpm"])
+                    
+                    if not is_ocr or not model.siblings:
+                        continue
+
+                    siblings = [f.rfilename for f in model.siblings if f.rfilename.endswith(".gguf")]
+                    if not siblings: continue
+                        
+                    best_quant = next((f for f in siblings if "Q4_K_M" in f), next((f for f in siblings if "Q4_0" in f), siblings[0]))
+                    estimated_size, estimated_vram = self._estimate_specs(model_id, best_quant)
+
+                    if estimated_vram > available_target:
+                        continue
+
+                    # Score baseado em downloads e relevância OCR
+                    score_bonus = 1.0
+                    if "ocr" in model_id.lower() or "ocr" in tags_str.lower():
+                        score_bonus *= 2.0
+                        
+                    score = (model.downloads / 30) * score_bonus
+                    
+                    model_data = {
+                        "id": model_id.replace("/", "__"),
+                        "name": model_id.split("/")[-1],
+                        "repo": model_id,
+                        "filename": best_quant,
+                        "size_gb": estimated_size,
+                        "vram_required": estimated_vram,
+                        "description": f"Downloads: {model.downloads:,} | OCR/Vision Model".replace(",", "."),
+                        "downloads": model.downloads,
+                        "score": score,
+                        "url": f"https://huggingface.co/{model_id}",
+                        "installed": (self.model_dir / best_quant).exists()
+                    }
+                    
+                    self.model_cache[model_data["id"]] = model_data
+                    discovered.append(model_data)
+                    
+                    if len(discovered) >= 10: break
+                        
+                except Exception:
+                    continue
+
+            # Adicionar modelos recomendados estáticos de visão
+            for rm in RECOMMENDED_MODELS:
+                if rm.get("is_vision") and not any(d["id"] == rm["id"] for d in discovered):
+                    model_path = self.model_dir / rm["filename"]
+                    rm["installed"] = model_path.exists()
+                    rm["score"] = 999  # Garantir que fiquem no topo
+                    discovered.append(rm)
+
+            discovered.sort(key=lambda x: x.get("score", 0), reverse=True)
+            return discovered
+            
+        except Exception as e:
+            print(f"[ModelManager] Erro na descoberta OCR: {e}")
+            return []
+
+    def search_ocr_models(self, query: str) -> list[dict]:
+        """Busca modelos de OCR específicos."""
+        print(f"[ModelManager] Buscando OCR por '{query}'...")
+        system_ram = self.get_system_ram()
+        available_target = max(2.0, system_ram - 1.0)
+        
         try:
             models = self._hf_api.list_models(
                 search=query,
-                filter=["gguf", "text-generation"],
+                filter=["gguf", "image-text-to-text"],
                 sort="downloads",
-                limit=50 # Buscar mais para poder filtrar
+                limit=30
             )
              
             results = []
             for base_model in models:
                 try:
-                    # Fetch details for siblings
+                    model = self._hf_api.model_info(base_model.modelId)
+                    if not model.siblings: continue
+
+                    siblings = [f.rfilename for f in model.siblings if f.rfilename.endswith(".gguf")]
+                    if not siblings: continue
+                    
+                    best_quant = next((f for f in siblings if "Q4_K_M" in f), next((f for f in siblings if "Q4_0" in f), siblings[0]))
+                    estimated_size, estimated_vram = self._estimate_specs(base_model.modelId, best_quant)
+
+                    if estimated_vram > available_target: continue
+
+                    results.append({
+                        "id": base_model.modelId.replace("/", "__"),
+                        "name": base_model.modelId.split("/")[-1],
+                        "repo": base_model.modelId,
+                        "filename": best_quant,
+                        "size_gb": estimated_size,
+                        "vram_required": estimated_vram,
+                        "description": f"Downloads: {model.downloads:,} | Vision".replace(",", "."),
+                        "downloads": model.downloads,
+                        "url": f"https://huggingface.co/{base_model.modelId}",
+                        "installed": (self.model_dir / best_quant).exists()
+                    })
+                    
+                    self.model_cache[results[-1]["id"]] = results[-1]
+                    if len(results) >= 8: break
+                except Exception: continue
+                
+            return results
+        except Exception as e:
+            print(f"[ModelManager] Erro na busca OCR: {e}")
+            return []
+
+    def search_models(self, query: str) -> list[dict]:
+        """Busca modelos específicos no HF, filtrando por hardware e qualidade."""
+        print(f"[ModelManager] Buscando por '{query}'...")
+        system_ram = self.get_system_ram()
+        available_target = max(2.0, system_ram - 1.5)
+        
+        try:
+            models = self._hf_api.list_models(
+                search=query,
+                filter=["gguf", "text-generation"],
+                sort="downloads",
+                limit=30
+            )
+             
+            results = []
+            for base_model in models:
+                try:
                     model = self._hf_api.model_info(base_model.modelId)
                     
                     if not model.siblings:
@@ -350,13 +439,14 @@ class ModelManager:
                     siblings = [f.rfilename for f in model.siblings if f.rfilename.endswith(".gguf")]
                     if not siblings: continue
                     
-                    best_quant = next((f for f in siblings if "Q4_K_M" in f), next((f for f in siblings if "Q4_0" in f), siblings[0]))
+                    best_quant = next((f for f in siblings if "Q4_K_M" in f), 
+                                    next((f for f in siblings if "Q4_0" in f), siblings[0]))
                     
                     estimated_size, estimated_vram = self._estimate_specs(model.modelId, best_quant)
                     
-                    # Filtro de Qualidade: Ignorar modelos muito pequenos (< 3GB RAM) para casos de uso sérios
-                    if estimated_vram < 3.0:
-                        continue
+                    # Na busca manual, somos menos restritivos mas avisamos se não couber (escondendo apenas se for absurdo)
+                    if estimated_vram > system_ram + 4: # Claramente impossível
+                         continue
 
                     model_data = {
                         "id": model.modelId.replace("/", "__"),
@@ -365,7 +455,7 @@ class ModelManager:
                         "filename": best_quant,
                         "size_gb": estimated_size,
                         "vram_required": estimated_vram,
-                        "description": f"Downloads: {model.downloads}",
+                        "description": f"Downloads: {model.downloads:,}".replace(",", "."),
                         "downloads": model.downloads,
                         "url": f"https://huggingface.co/{model.modelId}"
                     }
@@ -373,10 +463,9 @@ class ModelManager:
                     self.model_cache[model_data["id"]] = model_data
                     results.append(model_data)
                 except Exception as e:
-                    print(f"Error searching {base_model.modelId}: {e}")
                     pass
 
-            return results
+            return results[:10]
         except Exception as e:
             print(f"Erro na busca: {e}")
             return []
@@ -410,21 +499,52 @@ class ModelManager:
         return psutil.virtual_memory().total / (1024**3)
 
     def get_installed_models(self) -> list[dict]:
-        """Lista modelos instalados localmente."""
+        """Lista modelos instalados localmente com metadados completos."""
         models = []
         for gguf_file in self.model_dir.glob("*.gguf"):
-            # Tentar encontrar info nos recomendados
+            # Ignorar arquivos mmproj (projetores) da lista principal de modelos
+            if gguf_file.name.startswith("mmproj-"):
+                continue
+
+            # Tentar encontrar info nos recomendados ou cache
             known = next(
                 (m for m in RECOMMENDED_MODELS if m["filename"] == gguf_file.name),
                 None
             )
             
+            if not known:
+                for m in self.model_cache.values():
+                    if m.get("filename") == gguf_file.name:
+                        known = m
+                        break
+            
+            # Se não conhecemos, estimamos os specs na hora
+            if known:
+                size_gb = known.get("size_gb", round(gguf_file.stat().st_size / (1024**3), 2))
+                vram_required = known.get("vram_required", 0)
+                name = known["name"]
+                description = known["description"]
+                model_id = known.get("id", f"local__{gguf_file.stem.lower()}")
+            else:
+                size_gb, vram_required = self._estimate_specs(gguf_file.stem, gguf_file.name)
+                # Se a estimativa falhou (0), pegamos o tamanho real do arquivo
+                if size_gb == 0:
+                    size_gb = round(gguf_file.stat().st_size / (1024**3), 2)
+                    vram_required = size_gb + 1 # Fallback simples
+                
+                name = gguf_file.stem
+                description = "Instalado localmente"
+                model_id = f"local__{gguf_file.stem.lower()}"
+
             models.append({
+                "id": model_id,
                 "filename": gguf_file.name,
                 "path": str(gguf_file),
-                "size_gb": round(gguf_file.stat().st_size / (1024**3), 2),
-                "name": known["name"] if known else gguf_file.stem,
-                "description": known["description"] if known else "Modelo personalizado"
+                "size_gb": size_gb,
+                "vram_required": vram_required,
+                "name": name,
+                "description": description,
+                "installed": True
             })
         return models
     
@@ -649,12 +769,50 @@ class ModelManager:
         return self._downloads.get(model_id)
     
     def delete_model(self, filename: str) -> bool:
-        """Remove um modelo instalado."""
+        """Remove um modelo instalado e seus arquivos auxiliares."""
         model_path = self.model_dir / filename
+        success = False
+        
         if model_path.exists():
+            print(f"[ModelManager] Removendo modelo: {filename}")
             model_path.unlink()
-            return True
-        return False
+            success = True
+            
+            # Tentar encontrar se este modelo tem um projetor multimodal associado
+            # Procuramos por modelos conhecidos (estáticos ou cache) que usam este filename
+            model_info = None
+            
+            # 1. Procurar no cache dinâmico
+            for m in self.model_cache.values():
+                if m.get("filename") == filename:
+                    model_info = m
+                    break
+            
+            # 2. Procurar nos recomendados estáticos
+            if not model_info:
+                for m in RECOMMENDED_MODELS:
+                    if m.get("filename") == filename:
+                        model_info = m
+                        break
+            
+            # Se encontramos a info e tem mmproj, remover
+            if model_info and "mmproj_file" in model_info:
+                mmproj_filename = model_info["mmproj_file"]
+                mmproj_path = self.model_dir / mmproj_filename
+                if mmproj_path.exists():
+                    print(f"[ModelManager] Removendo projetor associado: {mmproj_filename}")
+                    try:
+                        mmproj_path.unlink()
+                    except Exception as e:
+                        print(f"[ModelManager] Erro ao remover projetor: {e}")
+            
+            # Fallback: Se o nome segue o padrão MiniCPM, tentar achar mmproj similar
+            if not model_info and "minicpm" in filename.lower():
+                for p in self.model_dir.glob("mmproj-*.gguf"):
+                    print(f"[ModelManager] Removendo possível projetor órfão: {p.name}")
+                    p.unlink()
+
+        return success
 
 
 # Singleton

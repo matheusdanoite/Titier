@@ -509,7 +509,7 @@ body {
   line-height: 1.4;
 }
 
-/* ===== Typing Indicator ===== */
+/* ===== typing-indicator ===== */
 .typing-indicator {
   display: flex;
   gap: 5px;
@@ -666,25 +666,117 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
-}.model-link {
-    color: var(--text-secondary);
-    transition: color 0.2s;
-    padding: 4px;
+}
+
+.model-link {
+  color: var(--text-secondary);
+  transition: color 0.2s;
+  padding: 4px;
 }
 
 .model-link:hover {
-    color: var(--primary);
-}.model-link-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-secondary);
-    padding: 4px;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
+  color: var(--accent);
+}
+
+.model-link-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
 }
 
 .model-link-btn:hover {
-    color: var(--primary);
+  color: var(--accent);
+}
+
+/* ===== Sidebar Content Wrapper ===== */
+.sidebar-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Header Left Actions (Menu + Title) */
+.header-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Active Sessions Container */
+.active-sessions-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  background: var(--bg-secondary);
+}
+
+.active-sessions-container.stack {
+  flex-direction: column;
+}
+
+.active-sessions-container.grid {
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Session Wrapper */
+.session-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  /* Minimum height in stack mode */
+  position: relative;
+}
+
+.active-sessions-container.stack .session-wrapper {
+  flex: 1;
+}
+
+.active-sessions-container.grid .session-wrapper {
+  min-width: 320px;
+  border-right: 1px solid var(--glass-border);
+  height: 100%;
+}
+
+/* Session Divider */
+.session-divider {
+  height: 1px;
+  background: var(--glass-border);
+  width: 100%;
+}
+
+/* Empty State for No Chats */
+.no-active-session {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 20px;
+}
+
+.start-chat-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.2s;
+}
+
+.start-chat-btn:hover {
+  transform: scale(1.05);
+  background: var(--accent-hover);
 }

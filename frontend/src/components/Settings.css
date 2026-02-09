@@ -349,6 +349,37 @@
     border-color: #ef4444;
 }
 
+/* Model Actions Layout */
+.model-actions-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.model-actions-row .model-button.installed {
+    flex: 1;
+}
+
+.model-button.delete {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    width: 42px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.model-button.delete:hover {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
 /* Compact Download Progress (matches button size) */
 .model-download-status {
     position: relative;

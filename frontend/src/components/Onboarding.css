@@ -1,10 +1,9 @@
-/* ===== Onboarding Styles ===== */
 .onboarding-container {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    padding: 24px;
+    padding: 12px 24px;
     background:
         radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
         radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
@@ -14,16 +13,15 @@
 .onboarding-card {
     width: 100%;
     max-width: 900px;
-    padding: 40px;
-    max-height: 90vh;
+    padding: 30px;
+    max-height: 95vh;
     overflow-y: auto;
     position: relative;
-    /* Para garantir contexto de stacking se precisar */
 }
 
 .onboarding-header {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 
 .onboarding-icon {
@@ -59,6 +57,22 @@
     gap: 8px;
 }
 
+.step-dot .dot-container {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.step-dot .progress-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotate(-90deg);
+}
+
 .step-dot .dot {
     width: 36px;
     height: 36px;
@@ -70,11 +84,18 @@
     border: 2px solid var(--glass-border);
     font-weight: 600;
     transition: all 0.3s ease;
+    position: relative;
+    z-index: 2;
 }
 
 .step-dot.active .dot {
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
     border-color: transparent;
+    color: white;
+}
+
+.step-dot.current .dot {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
 }
 
 .step-dot span {
@@ -192,16 +213,95 @@
     color: var(--text-secondary);
 }
 
-/* Models Grid */
-.models-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 16px;
+/* Featured Model Section */
+.featured-model-section {
+    margin: 24px 0;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.model-card.featured {
+    flex: 1;
+    max-width: 600px;
+    min-height: 280px;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+    border: 2px solid var(--accent);
+    background: linear-gradient(135deg, var(--glass-bg), rgba(99, 102, 241, 0.1));
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
+    text-align: center;
+}
+
+.model-card.featured h3 {
+    font-size: 1.5rem;
+    margin-bottom: 12px;
+}
+
+.model-card.featured .model-specs {
+    justify-content: center;
+    margin: 8px 0;
+}
+
+/* Advanced Options Toggle */
+.advanced-options {
+    text-align: center;
+    margin-top: 16px;
     margin-bottom: 24px;
-    /* max-height removido para deixar o card controlar o scroll */
-    /* max-height: 500px; */
-    /* overflow-y: auto; */
-    padding-right: 8px;
+}
+
+.text-button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: underline;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.text-button:hover {
+    opacity: 1;
+    color: var(--accent);
+}
+
+.advanced-section {
+    padding-top: 24px;
+    border-top: 1px solid var(--glass-border);
+}
+
+.models-grid.mini {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.model-card.mini {
+    padding: 12px 16px;
+}
+
+.model-card.mini h4 {
+    font-size: 0.9rem;
+    margin: 0;
+    flex: 1;
+}
+
+.icon-button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-button:hover {
+    transform: scale(1.1);
 }
 
 .model-card {
@@ -419,6 +519,35 @@
     font-size: 1.1rem;
 }
 
+/* Welcome Screen */
+.welcome-screen {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.welcome-illustration {
+    margin-bottom: 20px;
+}
+
+.welcome-icon-glow {
+    color: var(--accent);
+    filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));
+}
+
+.feature-icon {
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+.welcome-screen h2 {
+    font-size: 1.8rem;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
 /* Final Step */
 .final-step {
     text-align: center;
@@ -477,6 +606,63 @@
     border-radius: 8px;
     color: #ef4444;
     margin-bottom: 16px;
+}
+
+.compact-download-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--accent);
+    font-weight: 500;
+    margin: 8px 0;
+}
+
+.global-download-footer {
+    margin-top: 32px;
+    padding: 16px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.global-download-footer .progress-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.global-download-footer .status-text {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.global-download-footer .percent {
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.global-download-footer .progress-bar-mini {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.global-download-footer .fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #8b5cf6);
+    transition: width 0.3s ease;
+}
+
+.global-download-footer .details {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: right;
 }
 
 /* Text Colors */

@@ -25,7 +25,9 @@ Se você deseja compilar o projeto do zero, siga as instruções abaixo:
 - **🔒 100% Local (Privacidade Total):** Seus documentos e conversas nunca saem do seu computador.
 - **🧠 IA Multimodal:** Entende texto, tabelas, gráficos e anotações manuscritas.
 - **📚 RAG (Retrieval-Augmented Generation):** Respostas baseadas fielmente no conteúdo dos seus PDFs.
-- **⚡ Performance Nativa:** Backend em Python otimizado (Metal/CUDA) + Frontend leve em Rust/Tauri.
+- **💬 Chat Multi-Sessão:** Gerencie múltiplas conversas simultâneas com contextos independentes.
+- **⚡ Streaming em Tempo Real:** Respostas exibidas token a token para feedback instantâneo.
+- **🚀 Performance Nativa:** Backend em Python otimizado (Metal/CUDA) + Frontend leve em Rust/Tauri.
 
 ---
 
@@ -79,7 +81,7 @@ chmod +x app/install.sh
 O sistema precisa de modelos GGUF para funcionar.
 1.  Crie a pasta: `mkdir -p ~/.titier/models`
 2.  Baixe modelos (ex: Llama-3.1-8B-Instruct-Q4_K_M.gguf) e coloque nesta pasta.
-3.  O `server.py` buscará modelos automaticamente neste diretório.
+3.  O `server.py` buscará modelos automaticamente neste diretório e utilizará uma **janela de contexto otimizada de 8192 tokens** para garantir estabilidade e performance em hardware local.
 
 **Rodar o Backend:**
 ```bash

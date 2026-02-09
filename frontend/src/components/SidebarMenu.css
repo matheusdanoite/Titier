@@ -1,0 +1,160 @@
+/* SidebarMenu.css */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 90;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--glass-border);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-header-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.sidebar-header-area h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.new-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: transform 0.2s;
+}
+
+.new-chat-btn:hover {
+    transform: translateY(-2px);
+    background: var(--accent-hover);
+}
+
+.sessions-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.session-item:hover {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.session-item.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--accent);
+}
+
+.session-item-content {
+    flex: 1;
+    overflow: hidden;
+}
+
+.session-item-title {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.session-item-date {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.delete-session-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+}
+
+.session-item:hover .delete-session-btn {
+    opacity: 1;
+}
+
+.delete-session-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error);
+}
+
+.empty-sessions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    text-align: center;
+}
+
+.empty-sessions svg {
+    margin-bottom: 12px;
+}

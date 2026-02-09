@@ -151,7 +151,7 @@ def get_pdf_processor(use_vision: bool = False) -> PDFProcessor:
 class ChatRequest(BaseModel):
     message: str
     use_rag: bool = True
-    max_tokens: int = 512
+    max_tokens: int = 4096
     source_filter: Optional[str] = None  # Filtrar por nome do arquivo
     search_mode: str = "local"  # "local" (documento atual) ou "global" (todos)
 
@@ -207,8 +207,22 @@ async def root():
     }
 
 
+@app.get("/models/ocr/recommended")
+async def get_recommended_ocr_models():
+    """Retorna modelos OCR recomendados."""
+    manager = get_model_manager()
+    return manager.discover_ocr_models()
+
+
+@app.get("/models/ocr/search")
+async def search_ocr_models(q: str):
+    """Busca modelos OCR no Hugging Face."""
+    manager = get_model_manager()
+    return manager.search_ocr_models(q)
+
+
 @app.get("/status")
-async def status():
+async def get_status():
     """Status detalhado do sistema."""
     backend_info = get_backend_info()
     
@@ -256,7 +270,7 @@ async def chat(request: ChatRequest):
                 
                 results = vs.search(
                     request.message, 
-                    limit=5,
+                    limit=3,
                     source_filter=filter_source
                 )
                 sources = results
@@ -284,6 +298,96 @@ Pergunta: {request.message}
 Resposta:"""
     
     # Gerar resposta
+    if not _chat_model:
+        # Tentar carregar se não estiver
+        get_chat_model()
+        
+    if _chat_model:
+        response_text = _chat_model.chat(
+            messages=[
+                {"role": "system", "content": prompt.split("Pergunta:")[0].strip()},
+                {"role": "user", "content": f"Pergunta: {request.message}"}
+            ],
+            max_tokens=request.max_tokens
+        )
+        return {
+            "response": response_text,
+            "sources": sources,
+            "model_used": _chat_model.model_path
+        }
+    
+    raise HTTPException(status_code=503, detail="Modelo de chat não disponível")
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Endpoint de chat com streaming.
+    Retorna Server-Sent Events (SSE).
+    """
+    sources = []
+    context = ""
+    
+    # 1. Recuperar contexto RAG (igual ao endpoint normal)
+    if request.use_rag:
+        try:
+            vs = get_vector_store()
+            stats = vs.get_stats()
+            
+            if stats.get("points_count", 0) > 0:
+                filter_source = None
+                if request.search_mode == "local" and request.source_filter:
+                    filter_source = request.source_filter
+                    print(f"[Chat] Filtrando por fonte: {filter_source}")
+                
+                results = vs.search(request.message, limit=3, source_filter=filter_source)
+                print(f"[Chat] Resultados encontrados: {len(results)}")
+                
+                sources = results
+                context = "\n\n".join([r["text"] for r in results])
+                print(f"[Chat] Tamanho do contexto: {len(context)} caracteres")
+        except Exception as e:
+            print(f"[Chat] Erro no RAG: {e}")
+
+    # 2. Construir prompt
+    system_prompt = "Você é Titier, um assistente de estudos inteligente."
+    if context:
+        system_prompt = f"""Baseado no seguinte contexto dos documentos:
+
+{context}
+
+Responda a pergunta do usuário de forma clara e precisa."""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": request.message}
+    ]
+
+    # 3. Gerador assíncrono para streaming
+    async def event_generator():
+        # Enviar fontes primeiro como evento JSON especial
+        if sources:
+            import json
+            yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"
+        
+        model = get_chat_model()
+        if not model:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Modelo não carregado'})}\n\n"
+            return
+
+        async for token in model.chat_stream(messages, max_tokens=request.max_tokens):
+            # Enviar cada token
+            # Formato SSE: data: <conteudo>\n\n
+            if token:
+                # Escape newlines for SSE data payload if needed, but simple replacement works for most clients
+                # Or just send JSON for safety
+                import json
+                payload = json.dumps({"type": "token", "content": token})
+                yield f"data: {payload}\n\n"
+        
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
     llm = get_chat_model()
     if llm:
         try:
@@ -593,51 +697,48 @@ async def get_onboarding_status():
     manager = get_model_manager()
     
     installed_models = manager.get_installed_models()
-    has_model = len(installed_models) > 0
+    has_llm = len(installed_models) > 0
+    has_ocr = any(
+        "ocr" in m["name"].lower() or 
+        "vision" in m["name"].lower() or 
+        "minicpm" in m["name"].lower() or
+        "vl" in m["name"].lower()
+        for m in installed_models
+    )
     
     # Verificar se embeddings estão carregados
     embeddings_ready = False
     try:
         vs = get_vector_store()
         embeddings_ready = vs.encoder is not None
-        stats = vs.get_stats()
-        has_documents = stats.get("points_count", 0) > 0
     except:
-        has_documents = False
+        pass
     
     steps = [
         {
-            "id": "gpu",
-            "title": "Aceleração GPU",
-            "completed": backend_info["gpu_available"],
-            "description": f"Backend: {backend_info['backend'].upper()}"
+            "id": "llm",
+            "title": "Modelo de IA",
+            "completed": has_llm,
+            "description": "Pronto" if has_llm else "Pendente"
         },
         {
-            "id": "model",
-            "title": "Modelo de IA",
-            "completed": has_model,
-            "description": installed_models[0]["name"] if has_model else "Nenhum modelo instalado"
+            "id": "ocr",
+            "title": "Modelo de Visão (OCR)",
+            "completed": has_ocr,
+            "description": "Pronto" if has_ocr else "Pendente"
         },
         {
             "id": "embeddings",
-            "title": "Modelo de Embeddings",
+            "title": "Busca Inteligente",
             "completed": embeddings_ready,
-            "description": "bge-m3 pronto" if embeddings_ready else "Não inicializado (2.3 GB)"
-        },
-        {
-            "id": "documents",
-            "title": "Documentos",
-            "completed": has_documents,
-            "description": f"{stats.get('points_count', 0)} chunks indexados" if has_documents else "Nenhum PDF carregado"
+            "description": "Pronto" if embeddings_ready else "Não inicializado"
         }
     ]
     
-    all_completed = all(s["completed"] for s in steps)
-    
     return {
-        "completed": all_completed,
         "steps": steps,
-        "ready_to_chat": has_model and embeddings_ready
+        "ready_to_chat": has_llm and embeddings_ready,
+        "gpu": backend_info["gpu_available"]
     }
 
 

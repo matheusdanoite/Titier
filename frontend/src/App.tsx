@@ -2,35 +2,33 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send,
-  FileText,
   Upload,
   Settings as SettingsIcon,
   Sparkles,
-  ChevronDown,
-  BookOpen,
-  MessageSquare,
   GripVertical,
   ZoomIn,
   ZoomOut,
   ChevronLeft,
   ChevronRight as ChevronRightIcon,
-  Globe
+  BookOpen,
+  Menu,
+  Columns as ColumnsIcon,
+  Maximize2,
+  FileText
 } from 'lucide-react';
+
 import Onboarding from './components/Onboarding';
 import { Settings } from './components/Settings';
 import { DebugMenu } from './components/DebugMenu';
+import { ChatSession, Message } from './components/ChatSession';
+import { SidebarMenu, Session } from './components/SidebarMenu';
+
 import './App.css';
 import './components/Onboarding.css';
+import './components/ChatSession.css';
+import './components/SidebarMenu.css';
 
 const API_URL = 'http://127.0.0.1:8000';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: { text: string; page?: number }[];
-}
 
 interface HealthStatus {
   status: string;
@@ -46,29 +44,39 @@ interface UploadedPDF {
   chunks: number;
 }
 
+// Extends functionality of basic session with message history
+interface SessionData extends Session {
+  messages: Message[];
+  searchMode: 'local' | 'global';
+  contextFilter: string | null;
+}
+
 function App() {
+  // App State
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [tauriStatus, setTauriStatus] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
+
+  // Drag & Drop / Upload
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  const [showSources, setShowSources] = useState<string | null>(null);
 
-  // New layout state
+  // Layout State
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [currentPDF, setCurrentPDF] = useState<UploadedPDF | null>(null);
   const [pdfZoom, setPdfZoom] = useState(100);
-  const [globalSearch, setGlobalSearch] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Chat Sessions State
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [activeSessionIds, setActiveSessionIds] = useState<string[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'stack' | 'grid'>('stack'); // For multi-view layout
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
 
@@ -76,16 +84,27 @@ function App() {
     checkHealth();
   }, []);
 
+  // Initialize a default session if none exists
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!showOnboarding && sessions.length === 0) {
+      handleNewSession();
+    }
+  }, [showOnboarding]);
+
+  // Sync session context with current PDF if needed (optional behavior)
+  useEffect(() => {
+    if (currentPDF) {
+      // Auto-update context for active sessions? 
+      // Or keep them independent. Let's keep independent for now based on user request.
+    }
+  }, [currentPDF]);
 
   // Handle resize
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
       const newWidth = window.innerWidth - e.clientX;
-      setSidebarWidth(Math.max(300, Math.min(600, newWidth)));
+      setSidebarWidth(Math.max(300, Math.min(800, newWidth)));
     };
 
     const handleMouseUp = () => {
@@ -113,12 +132,10 @@ function App() {
         setShowOnboarding(false);
       }
 
-      // Also fetch stats for debug
       const statsRes = await fetch(`${API_URL}/status`);
       const statsData = await statsRes.json();
       setStats(statsData);
 
-      // Fetch tauri status if in tauri environment
       try {
         const tStatus = await invoke('get_backend_status');
         setTauriStatus(tStatus);
@@ -133,7 +150,6 @@ function App() {
   // Keyboard shortcut for debug menu
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Alt+D or Option+D
       if (e.altKey && (e.key === 'd' || e.key === 'D')) {
         e.preventDefault();
         setShowDebug(prev => !prev);
@@ -144,51 +160,55 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  // --- Session Management ---
 
-    const userMessage: Message = {
+  const handleNewSession = () => {
+    const newSession: SessionData = {
       id: Date.now().toString(),
-      role: 'user',
-      content: input.trim()
+      title: currentPDF ? `Chat: ${currentPDF.name}` : 'Nova Conversa',
+      date: new Date(),
+      preview: 'Inicie a conversa...',
+      messages: [],
+      searchMode: 'local',
+      contextFilter: currentPDF?.name || null
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-
-    try {
-      const res = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage.content,
-          source_filter: currentPDF?.name || null,
-          search_mode: globalSearch ? 'global' : 'local'
-        })
-      });
-
-      const data = await res.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response,
-        sources: data.sources
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Erro ao se comunicar com o backend. Verifique se o servidor está rodando.'
-      }]);
-    } finally {
-      setLoading(false);
-    }
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionIds(prev => [...prev, newSession.id]);
+    setIsMenuOpen(false);
   };
 
+  const handleSelectSession = (id: string) => {
+    if (!activeSessionIds.includes(id)) {
+      setActiveSessionIds(prev => [...prev, id]);
+    }
+    setIsMenuOpen(false);
+  };
+
+  const handleCloseSession = (id: string) => {
+    setActiveSessionIds(prev => prev.filter(sid => sid !== id));
+  };
+
+  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setActiveSessionIds(prev => prev.filter(sid => sid !== id));
+  };
+
+  const handleMessagesChange = (sessionId: string, newMessages: Message[]) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === sessionId) {
+        // Update preview based on last user message or assistant message
+        const lastMsg = newMessages[newMessages.length - 1];
+        const preview = lastMsg ? lastMsg.content.slice(0, 50) + (lastMsg.content.length > 50 ? '...' : '') : s.preview;
+
+        return { ...s, messages: newMessages, preview };
+      }
+      return s;
+    }));
+  };
+
+  // --- Drag & Drop ---
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -228,13 +248,15 @@ function App() {
         setUploadProgress(`✓ ${data.filename} (${data.chunks_added} chunks)`);
         checkHealth();
 
-        // Set current PDF for viewing
         const pdfUrl = URL.createObjectURL(file);
         setCurrentPDF({
           name: file.name,
           url: pdfUrl,
           chunks: data.chunks_added
         });
+
+        // Optionally creating a new session for the new PDF
+        // handleNewSession(); 
 
         setTimeout(() => setUploadProgress(null), 3000);
       } else {
@@ -275,6 +297,17 @@ function App() {
         health={health}
         stats={stats}
         tauriStatus={tauriStatus}
+      />
+
+      {/* Sidebar Menu Overlay */}
+      <SidebarMenu
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        sessions={sessions}
+        activeSessionId={activeSessionIds[activeSessionIds.length - 1] || null} // Highlight last active
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       {/* Drag Overlay */}
@@ -407,7 +440,6 @@ function App() {
         className={`chat-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
         style={{ width: isSidebarCollapsed ? 48 : sidebarWidth }}
       >
-        {/* Collapse Toggle */}
         <button
           className="sidebar-toggle"
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -417,30 +449,27 @@ function App() {
         </button>
 
         {!isSidebarCollapsed && (
-          <>
+          <div className="sidebar-content-wrapper">
             {/* Sidebar Header */}
             <div className="sidebar-header">
-              <div className="sidebar-title">
-                <MessageSquare size={20} />
-                <span>Chat</span>
-              </div>
-              <div className="header-actions">
-                <div className="search-mode-toggle">
-                  <button
-                    className={`mode-btn ${!globalSearch ? 'active' : ''}`}
-                    onClick={() => setGlobalSearch(false)}
-                    title="Buscar no Contexto Local (PDF atual)"
-                  >
-                    <FileText size={14} />
-                  </button>
-                  <button
-                    className={`mode-btn ${globalSearch ? 'active' : ''}`}
-                    onClick={() => setGlobalSearch(true)}
-                    title="Buscar Globalmente (Todos os documentos)"
-                  >
-                    <Globe size={14} />
-                  </button>
+              <div className="header-left-actions">
+                <button className="icon-button" onClick={() => setIsMenuOpen(true)}>
+                  <Menu size={20} />
+                </button>
+                <div className="sidebar-title">
+                  <span>Chat</span>
                 </div>
+              </div>
+
+              <div className="header-actions">
+                <button
+                  className="icon-button"
+                  onClick={() => setViewMode(prev => prev === 'stack' ? 'grid' : 'stack')}
+                  title={viewMode === 'stack' ? "Modo Grade" : "Modo Pilha"}
+                  disabled={activeSessionIds.length < 2}
+                >
+                  {viewMode === 'stack' ? <ColumnsIcon size={18} /> : <Maximize2 size={18} />}
+                </button>
                 <button
                   className="icon-button"
                   onClick={() => setShowSettings(true)}
@@ -451,112 +480,42 @@ function App() {
               </div>
             </div>
 
-            {/* Context Indicator */}
-            {currentPDF && !globalSearch && (
-              <div className="context-indicator">
-                <FileText size={14} />
-                <span>Contexto: {currentPDF.name}</span>
-              </div>
-            )}
-            {globalSearch && (
-              <div className="context-indicator global">
-                <Globe size={14} />
-                <span>Buscando em todos os documentos</span>
-              </div>
-            )}
-
-            {/* Messages */}
-            <div className="sidebar-messages">
-              {messages.length === 0 ? (
-                <div className="chat-empty">
-                  <Sparkles size={32} />
-                  <p>Faça perguntas sobre seus documentos</p>
+            {/* Active Sessions Area */}
+            <div className={`active-sessions-container ${viewMode}`}>
+              {activeSessionIds.length === 0 ? (
+                <div className="no-active-session">
+                  <Sparkles size={48} className="empty-icon" />
+                  <h3>Nenhum chat aberto</h3>
+                  <button onClick={handleNewSession} className="start-chat-btn">
+                    Iniciar Conversa
+                  </button>
                 </div>
               ) : (
-                <div className="messages-list">
-                  {messages.map((msg) => (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`message ${msg.role}`}
-                    >
-                      <div className="message-content">
-                        {msg.content}
-                      </div>
+                activeSessionIds.map((sessionId, index) => {
+                  const sessionData = sessions.find(s => s.id === sessionId);
+                  if (!sessionData) return null;
 
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div className="message-sources">
-                          <button
-                            className="sources-toggle"
-                            onClick={() => setShowSources(showSources === msg.id ? null : msg.id)}
-                          >
-                            <FileText size={14} />
-                            {msg.sources.length} fonte(s)
-                            <ChevronDown
-                              size={14}
-                              className={showSources === msg.id ? 'rotated' : ''}
-                            />
-                          </button>
-
-                          <AnimatePresence>
-                            {showSources === msg.id && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="sources-list"
-                              >
-                                {msg.sources.map((source, i) => (
-                                  <div key={i} className="source-item">
-                                    {source.page && <span className="page-badge">p. {source.page}</span>}
-                                    <p>{source.text}</p>
-                                  </div>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                  return (
+                    <div key={sessionId} className="session-wrapper" style={{ flex: viewMode === 'grid' ? 1 : '0 0 100%' }}>
+                      <ChatSession
+                        sessionId={sessionId}
+                        title={sessionData.title}
+                        isActive={true}
+                        onClose={() => handleCloseSession(sessionId)}
+                        contextFilter={sessionData.contextFilter}
+                        searchMode={sessionData.searchMode}
+                        initialMessages={sessionData.messages}
+                        onMessagesChange={(msgs) => handleMessagesChange(sessionId, msgs)}
+                      />
+                      {viewMode === 'stack' && index < activeSessionIds.length - 1 && (
+                        <div className="session-divider" />
                       )}
-                    </motion.div>
-                  ))}
-
-                  {loading && (
-                    <div className="message assistant loading">
-                      <div className="typing-indicator">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                      </div>
                     </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
+                  );
+                })
               )}
             </div>
-
-            {/* Input */}
-            <div className="sidebar-input">
-              <div className="input-wrapper">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder="Pergunte algo..."
-                  disabled={loading}
-                />
-                <button
-                  className="send-button"
-                  onClick={sendMessage}
-                  disabled={!input.trim() || loading}
-                >
-                  <Send size={18} />
-                </button>
-              </div>
-            </div>
-          </>
+          </div>
         )}
       </aside>
     </div>

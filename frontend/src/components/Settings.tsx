@@ -108,9 +108,15 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
     const fetchModels = async () => {
         try {
-            const res = await fetch(`${API_URL}/models/recommended`);
+            const res = await fetch(`${API_URL}/models`);
             const data = await res.json();
-            setModels(data);
+
+            // Deduplicação: Se um modelo está em 'installed', remover versões dele do 'recommended'
+            // baseando-se no filename para garantir que não apareça duplicado
+            const installedFiles = new Set(data.installed.map((m: Model) => m.filename));
+            const filteredRecommended = data.recommended.filter((m: Model) => !installedFiles.has(m.filename));
+
+            setModels([...data.installed, ...filteredRecommended]);
         } catch (err) {
             console.error('Erro ao buscar modelos:', err);
         }
@@ -143,12 +149,12 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         setTimeout(pollProgress, 1000);
                     } else if (status.status === 'completed') {
                         setDownloadStatus({ ...status, progress: 100 });
-                        // Pequeno delay para mostrar 100%
+                        // Pequeno delay para mostrar 100% e garantir que o arquivo final está estável
                         setTimeout(() => {
                             setDownloading(null);
                             setDownloadStatus(null);
                             fetchModels();
-                        }, 500);
+                        }, 800);
                     } else if (status.status === 'failed') {
                         setDownloading(null);
                         setDownloadStatus(null);
@@ -333,57 +339,81 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                     <div className="settings-panel">
                         {activeTab === 'models' && (
                             <div className="panel-section">
-                                <h3>Gerenciar Modelos</h3>
-                                <div className="models-grid">
-                                    {models.map(model => (
-                                        <div key={model.id} className={`model-card ${model.installed ? 'installed' : ''}`}>
-                                            <h4>{model.name}</h4>
-                                            <p>{model.description}</p>
-                                            <div className="model-specs">
-                                                <span>{model.size_gb} GB</span>
-                                                <span>{model.vram_required} GB VRAM</span>
-                                            </div>
+                                <div className="models-container">
+                                    {/* Seção de Modelos Instalados */}
+                                    <div className="models-subsection">
+                                        <h3>Modelos Instalados</h3>
+                                        <div className="models-grid">
+                                            {models.filter(m => m.installed).length > 0 ? (
+                                                models.filter(m => m.installed).map(model => (
+                                                    <div key={model.id} className="model-card installed">
+                                                        <h4>{model.name}</h4>
+                                                        <p>{model.description}</p>
+                                                        <div className="model-specs">
+                                                            <span>{model.size_gb} GB</span>
+                                                            <span>{model.vram_required} GB VRAM</span>
+                                                        </div>
 
-                                            {downloading === model.id ? (
-                                                <div className="model-download-status">
-                                                    <div
-                                                        className="model-download-bar"
-                                                        style={{ width: `${downloadStatus?.progress || 0}%` }}
-                                                    />
-                                                    <div className="model-download-text">
-                                                        <Loader2 className="spin" size={14} />
-                                                        <span>{downloadStatus?.progress?.toFixed(0)}%</span>
-                                                        {downloadStatus?.speed_mbps ? (
-                                                            <span style={{ opacity: 0.7, fontSize: '0.8em' }}>
-                                                                ({downloadStatus.speed_mbps.toFixed(1)} MB/s)
-                                                            </span>
-                                                        ) : null}
+                                                        <div className="model-actions-row">
+                                                            <button className="model-button installed" disabled>
+                                                                <Check size={16} /> Instalado
+                                                            </button>
+                                                            <button
+                                                                className="model-button delete"
+                                                                onClick={() => requestDeleteModel(model)}
+                                                                title="Excluir modelo"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ) : model.installed ? (
-                                                <button
-                                                    className={`model-button installed ${hoveredModel === model.id ? 'danger' : ''}`}
-                                                    onMouseEnter={() => setHoveredModel(model.id)}
-                                                    onMouseLeave={() => setHoveredModel(null)}
-                                                    onClick={() => requestDeleteModel(model)}
-                                                >
-                                                    {hoveredModel === model.id ? (
-                                                        <>
-                                                            <Trash2 size={16} /> Excluir
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Check size={16} /> Instalado
-                                                        </>
-                                                    )}
-                                                </button>
+                                                ))
                                             ) : (
-                                                <button className="model-button" onClick={() => downloadModel(model.id)}>
-                                                    <Download size={16} /> Baixar
-                                                </button>
+                                                <div className="empty-state">
+                                                    <p>Nenhum modelo instalado.</p>
+                                                </div>
                                             )}
                                         </div>
-                                    ))}
+                                    </div>
+
+                                    {/* Seção de Download de Novos Modelos */}
+                                    <div className="models-subsection" style={{ marginTop: '40px' }}>
+                                        <h3 style={{ borderBottomColor: 'var(--glass-border)' }}>Baixar outros modelos</h3>
+                                        <div className="models-grid">
+                                            {models.filter(m => !m.installed).map(model => (
+                                                <div key={model.id} className="model-card">
+                                                    <h4>{model.name}</h4>
+                                                    <p>{model.description}</p>
+                                                    <div className="model-specs">
+                                                        <span>{model.size_gb} GB</span>
+                                                        <span>{model.vram_required} GB VRAM</span>
+                                                    </div>
+
+                                                    {downloading === model.id ? (
+                                                        <div className="model-download-status">
+                                                            <div
+                                                                className="model-download-bar"
+                                                                style={{ width: `${downloadStatus?.progress || 0}%` }}
+                                                            />
+                                                            <div className="model-download-text">
+                                                                <Loader2 className="spin" size={14} />
+                                                                <span>{downloadStatus?.progress?.toFixed(0)}%</span>
+                                                                {downloadStatus?.speed_mbps ? (
+                                                                    <span style={{ opacity: 0.7, fontSize: '0.8em' }}>
+                                                                        ({downloadStatus.speed_mbps.toFixed(1)} MB/s)
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <button className="model-button" onClick={() => downloadModel(model.id)}>
+                                                            <Download size={16} /> Baixar
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

@@ -60,7 +60,7 @@ class LLMEngine:
     def __init__(
         self, 
         model_path: Optional[str] = None,
-        n_ctx: int = 4096,
+        n_ctx: int = 8192,
         n_gpu_layers: int = -1,
         verbose: bool = False
     ):
@@ -161,6 +161,47 @@ class LLMEngine:
             text = chunk["choices"][0]["text"]
             if text:
                 yield text
+    
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> AsyncGenerator[str, None]:
+        """Chat completion com streaming."""
+        if not self.llm:
+            raise RuntimeError("Modelo não carregado. Chame load() primeiro.")
+        
+        # Calcular tokens disponíveis
+        n_ctx = self.llm.n_ctx()
+        prompt_tokens = len(self.llm.tokenize(
+            str(messages).encode("utf-8") 
+        )) # Aproximação rápida
+        
+        print(f"[LLM] Contexto Max: {n_ctx}, Prompt (aprox): {prompt_tokens}")
+
+        available_tokens = n_ctx - prompt_tokens - 100 # Buffer de segurança
+        print(f"[LLM] Tokens disponíveis para geração: {available_tokens}")
+        
+        if available_tokens < 100:
+            print("[LLM] Erro: Contexto insuficiente")
+            yield "Erro: Contexto muito longo para o modelo processar. Tente reduzir o tamanho do texto ou das mensagens anteriores."
+            return
+
+        final_max_tokens = min(max_tokens, available_tokens)
+        print(f"[LLM] Max tokens final: {final_max_tokens}")
+        
+        print("[LLM] Iniciando geração...")
+        for chunk in self.llm.create_chat_completion(
+            messages=messages,
+            max_tokens=final_max_tokens,
+            temperature=temperature,
+            stream=True
+        ):
+            if "content" in chunk["choices"][0]["delta"]:
+                token = chunk["choices"][0]["delta"]["content"]
+                # print(f"[Debug] Token: {token}", end="", flush=True) 
+                yield token
     
     def unload(self):
         """Libera o modelo da memória."""

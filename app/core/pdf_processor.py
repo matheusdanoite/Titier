@@ -27,9 +27,9 @@ class PDFProcessor:
     
     def __init__(
         self,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        min_chunk_length: int = 50
+        chunk_size: int = 200,
+        chunk_overlap: int = 30,
+        min_chunk_length: int = 20
     ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
