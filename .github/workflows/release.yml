@@ -1,139 +1,152 @@
 name: Release
 on:
-    push:
-        tags:
-            - "*"
+  push:
+    tags:
+      - "*"
 
 jobs:
-    release:
-        permissions:
-            contents: write
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - platform: "macos-14" # Apple Silicon
-                      os: "macos-14"
-                      target: "aarch64-apple-darwin"
-                      sidecar_target: "aarch64-apple-darwin"
-                    - platform: "windows-latest"
-                      os: "windows-latest"
-                      target: "x86_64-pc-windows-msvc"
-                      sidecar_target: "x86_64-pc-windows-msvc.exe"
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-14" # Apple Silicon
+            os: "macos-14"
+            target: "aarch64-apple-darwin"
+            sidecar_target: "aarch64-apple-darwin"
+          - platform: "windows-latest"
+            os: "windows-latest"
+            target: "x86_64-pc-windows-msvc"
+            sidecar_target: "x86_64-pc-windows-msvc.exe"
 
-        runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
-        steps:
-            - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Setup Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Install Poetry
-              run: |
-                  pip install poetry
+      - name: Install Poetry
+        run: |
+          pip install poetry
 
-            - name: Install Python Dependencies
-              run: |
-                  cd app
-                  poetry install --no-root
-                  poetry run pip install pyinstaller
+      - name: Install Python Dependencies
+        run: |
+          cd app
+          poetry install --no-root
+          poetry run pip install pyinstaller
 
-            - name: Build Python Backend
-              shell: bash
-              run: |
-                  cd app
-                  poetry run pyinstaller server.py \
-                    --name titier-backend \
-                    --onefile \
-                    --collect-all llama_cpp \
-                    --collect-all sentence_transformers \
-                    --collect-all qdrant_client
+      - name: Build Python Backend
+        shell: bash
+        run: |
+          cd app
+          poetry run pyinstaller server.py \
+            --name titier-backend \
+            --onefile \
+            --collect-all llama_cpp \
+            --collect-all sentence_transformers \
+            --collect-all qdrant_client
 
-            - name: Prepare Sidecar
-              shell: bash
-              run: |
-                  mkdir -p frontend/src-tauri/sidecars
-                  if [ "${{ matrix.os }}" == "windows-latest" ]; then
-                    mv app/dist/titier-backend.exe frontend/src-tauri/sidecars/titier-backend-${{ matrix.sidecar_target }}
-                  else
-                    mv app/dist/titier-backend frontend/src-tauri/sidecars/titier-backend-${{ matrix.sidecar_target }}
-                  fi
+      - name: Prepare Sidecar
+        shell: bash
+        run: |
+          mkdir -p frontend/src-tauri/sidecars
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            mv app/dist/titier-backend.exe frontend/src-tauri/sidecars/titier-backend-${{ matrix.sidecar_target }}
+          else
+            mv app/dist/titier-backend frontend/src-tauri/sidecars/titier-backend-${{ matrix.sidecar_target }}
+          fi
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.target }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-            - name: Install Frontend Dependencies
-              run: |
-                  cd frontend
-                  npm install
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
 
-            - name: Build Tauri App
-              run: |
-                  cd frontend
-                  npm run tauri build -- --target ${{ matrix.target }}
+      - name: Build Tauri App
+        run: |
+          cd frontend
+          npm run tauri build -- --target ${{ matrix.target }}
 
-            - name: Rename & Finalize Assets
-              shell: bash
-              run: |
-                  # Get version digits (e.g., v0.2.0, Titier-0.2 -> 0.2.0 or 0.2)
-                  TAG_NAME=${{ github.ref_name }}
-                  VERSION=$(echo $TAG_NAME | grep -oE "[0-9]+(\.[0-9]+)*" | head -n 1)
-                  if [ -z "$VERSION" ]; then VERSION="0.0.0"; fi
-                  echo "Detected version: $VERSION"
-                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+      - name: Rename & Finalize Assets
+        shell: bash
+        run: |
+          # Get version digits (e.g., v0.2.0, Titier-0.2 -> 0.2.0 or 0.2)
+          TAG_NAME=${{ github.ref_name }}
+          VERSION=$(echo $TAG_NAME | grep -oE "[0-9]+(\.[0-9]+)*" | head -n 1)
+          if [ -z "$VERSION" ]; then VERSION="0.0.0"; fi
+          echo "Detected version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-                  if [ "${{ matrix.os }}" == "windows-latest" ]; then
-                    # Primary path, fallback to search if needed
-                    BASE_DIR="frontend/src-tauri/target/${{ matrix.target }}/release/bundle/nsis"
-                    if [ ! -d "$BASE_DIR" ]; then BASE_DIR=$(find frontend/src-tauri/target -name nsis -type d | head -n 1); fi
-                    cd "$BASE_DIR"
-                    FOUND_EXE=$(ls *.exe 2>/dev/null | head -n 1)
-                    if [ -z "$FOUND_EXE" ]; then echo "Error: EXE not found in $BASE_DIR"; ls -R frontend/src-tauri/target; exit 1; fi
-                    NEW_NAME="Titier_${VERSION}_x64.exe"
-                    mv "$FOUND_EXE" "$NEW_NAME"
-                    echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
-                  else
-                    BASE_DIR="frontend/src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
-                    if [ ! -d "$BASE_DIR" ]; then BASE_DIR=$(find frontend/src-tauri/target -name dmg -type d | head -n 1); fi
-                    cd "$BASE_DIR"
-                    FOUND_DMG=$(ls *.dmg 2>/dev/null | head -n 1)
-                    if [ -z "$FOUND_DMG" ]; then echo "Error: DMG not found in $BASE_DIR"; ls -R frontend/src-tauri/target; exit 1; fi
-                    NEW_NAME="Titier_${VERSION}_aarch64.dmg"
-                    mv "$FOUND_DMG" "$NEW_NAME"
-                    echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
-                  fi
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            # Primary path, fallback to search if needed
+            BASE_DIR="frontend/src-tauri/target/${{ matrix.target }}/release/bundle/nsis"
+            if [ ! -d "$BASE_DIR" ]; then BASE_DIR=$(find frontend/src-tauri/target -name nsis -type d | head -n 1); fi
+            cd "$BASE_DIR"
+            FOUND_EXE=$(ls *.exe 2>/dev/null | head -n 1)
+            if [ -z "$FOUND_EXE" ]; then echo "Error: EXE not found in $BASE_DIR"; ls -R frontend/src-tauri/target; exit 1; fi
+            NEW_NAME="Titier_${VERSION}_x64.exe"
+            mv "$FOUND_EXE" "$NEW_NAME"
+            echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
+          else
+            BASE_DIR="frontend/src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+            if [ ! -d "$BASE_DIR" ]; then BASE_DIR=$(find frontend/src-tauri/target -name dmg -type d | head -n 1); fi
+            cd "$BASE_DIR"
+            FOUND_DMG=$(ls *.dmg 2>/dev/null | head -n 1)
+            if [ -z "$FOUND_DMG" ]; then echo "Error: DMG not found in $BASE_DIR"; ls -R frontend/src-tauri/target; exit 1; fi
+            NEW_NAME="Titier_${VERSION}_aarch64.dmg"
+            mv "$FOUND_DMG" "$NEW_NAME"
+            echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
+          fi
 
-            - name: Extract Release Notes
-              shell: bash
-              run: |
-                  # Use version digits
-                  V="${{ env.VERSION }}"
-                  if [ -z "$V" ]; then V=$(echo "${{ github.ref_name }}" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+"); fi
-                  echo "Extracting notes for version: $V"
-                  # Use a simpler sed command and escape brackets to satisfy YAML if needed
-                  # or just use a temporary variable
-                  SEARCH_PATTERN="## \[$V\]"
-                  sed -n "/$SEARCH_PATTERN/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
-                  if [ ! -s release_notes.md ]; then
-                    echo "Release $V" > release_notes.md
-                  fi
+      - name: Extract Release Notes
+        shell: bash
+        run: |
+          # Use version digits
+          V="${{ env.VERSION }}"
+          if [ -z "$V" ]; then V=$(echo "${{ github.ref_name }}" | grep -oE "[0-9]+(\.[0-9]+)*" | head -n 1); fi
+          echo "Searching for changelog entry starting with: $V"
 
-            - name: Upload Release Assets
-              uses: softprops/action-gh-release@v1
-              if: startsWith(github.ref, 'refs/tags/')
-              with:
-                  body_path: release_notes.md
-                  files: ${{ env.ARTIFACT_PATH }}
-                  draft: true
-                  name: "Titier v${{ env.VERSION }}"
-                  tag_name: ${{ github.ref_name }}
+          # Find the line number of the header for this version
+          START_LINE=$(grep -niE "## \[$V" CHANGELOG.md | head -n 1 | cut -d: -f1)
+
+          if [ -z "$START_LINE" ]; then
+            echo "Version $V not found in CHANGELOG.md, using generic notes."
+            echo "Release $V" > release_notes.md
+          else
+            # Extract from the next line after the header until the next header or end of file
+            tail -n +$((START_LINE + 1)) CHANGELOG.md | sed -e '/## \[/,$d' > release_notes.md
+            
+            # If the result is empty or just whitespace, provide a fallback
+            if [ ! -s release_notes.md ] || ! grep -q '[^[:space:]]' release_notes.md; then
+              echo "No content found for $V, using fallback."
+              echo "Release $V" > release_notes.md
+            fi
+          fi
+          echo "--- Extracted Notes ---"
+          cat release_notes.md
+          echo "-----------------------"
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          body_path: release_notes.md
+          files: ${{ env.ARTIFACT_PATH }}
+          draft: true
+          name: "Titier v${{ env.VERSION }}"
+          tag_name: ${{ github.ref_name }}
