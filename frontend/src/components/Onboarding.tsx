@@ -1,15 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Download,
-    Check,
-    Loader2,
-    Sparkles,
-    ChevronRight,
-    AlertCircle,
-    Database
-} from 'lucide-react';
-
+import { Download, Loader2, Sparkles, Search, ExternalLink, Check, AlertCircle, Database, ChevronRight } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 interface OnboardingStep {
     id: string;
     title: string;
@@ -25,6 +17,11 @@ interface Model {
     vram_required: number;
     installed: boolean;
     recommended?: boolean;
+    recommendation_reason?: string;
+    repo?: string;
+    filename?: string;
+    downloads?: number;
+    url?: string;
 }
 
 interface OnboardingProps {
@@ -42,11 +39,40 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     const [error, setError] = useState<string | null>(null);
     const [initializingEmbeddings, setInitializingEmbeddings] = useState(false);
     const [embeddingsProgress, setEmbeddingsProgress] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         fetchOnboardingStatus();
         fetchModels();
     }, []);
+
+    const handleSearch = (query: string) => {
+        setSearchQuery(query);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+        if (!query.trim()) {
+            fetchModels(); // Reset to recommended
+            return;
+        }
+
+        setIsSearching(true);
+        searchTimeout.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API_URL}/models/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                setModels(data);
+            } catch (err) {
+                console.error("Erro na busca:", err);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 500); // Debounce 500ms
+    };
 
     const fetchOnboardingStatus = async () => {
         try {
@@ -54,7 +80,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             const data = await res.json();
             setSteps(data.steps);
 
-            // Se já tem modelo, pular para o final
             if (data.ready_to_chat) {
                 onComplete();
             }
@@ -64,12 +89,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     };
 
     const fetchModels = async () => {
+        setIsLoading(true);
         try {
             const res = await fetch(`${API_URL}/models/recommended`);
             const data = await res.json();
             setModels(data);
         } catch (err) {
             console.error('Erro ao buscar modelos:', err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -79,11 +107,18 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         setError(null);
 
         try {
-            // Iniciar download
-            const res = await fetch(`${API_URL}/models/download/${modelId}`, {
+            // O ID do modelo pode conter barras (ex: owner/model), que o backend espera
+            // mas o FastAPI pode ter problemas se não for codificado ou se o backend esperar __
+            // O backend espera o ID com __ no lugar da barra para o endpoint, ou o ID normal?
+            // Olhando o server.py: @app.post("/models/download/{model_id}")
+            // E o model_manager.py: model = manager.get_model_by_id(model_id)
+            // Os modelos descobertos tem ID com __ (ex: MaziyarPanahi__Mistral...)
+            // Então devemos usar o ID como está.
+
+            const response = await fetch(`${API_URL}/models/download/${modelId}`, {
                 method: 'POST'
             });
-            const data = await res.json();
+            const data = await response.json();
 
             if (data.status === 'already_installed') {
                 setDownloading(null);
@@ -92,7 +127,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 return;
             }
 
-            // Polling de progresso
             const pollProgress = async () => {
                 const statusRes = await fetch(`${API_URL}/models/download/${modelId}/status`);
                 const status = await statusRes.json();
@@ -132,7 +166,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 return;
             }
 
-            // Polling de progresso
             const pollProgress = async () => {
                 const statusRes = await fetch(`${API_URL}/onboarding/init-embeddings/status`);
                 const status = await statusRes.json();
@@ -191,10 +224,22 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                             exit={{ opacity: 0, x: -20 }}
                             className="step-content"
                         >
-                            <h2>Escolha um Modelo de IA</h2>
+                            <h2>Escolha ou Descubra um Modelo</h2>
                             <p className="step-description">
-                                Selecione um modelo para baixar. Modelos maiores são mais precisos.
+                                Baixe um dos modelos recomendados ou pesquise em todo o Hugging Face.
                             </p>
+
+                            <div className="search-bar-container">
+                                <Search className="search-icon" size={20} />
+                                <input
+                                    type="text"
+                                    placeholder="Pesquisar modelos (ex: mistral, llama, qwen)..."
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                    className="search-input"
+                                />
+                                {isSearching && <Loader2 className="spin" size={18} />}
+                            </div>
 
                             {error && (
                                 <div className="error-banner">
@@ -204,56 +249,87 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                             )}
 
                             <div className="models-grid">
-                                {models.map((model) => (
-                                    <div
-                                        key={model.id}
-                                        className={`model-card ${model.recommended ? 'recommended' : ''} ${model.installed ? 'installed' : ''}`}
-                                    >
-                                        {model.recommended && <span className="badge">Recomendado</span>}
-                                        {model.installed && <span className="badge installed">Instalado</span>}
-
-                                        <h3>{model.name}</h3>
-                                        <p>{model.description}</p>
-
-                                        <div className="model-specs">
-                                            <span>{model.size_gb} GB</span>
-                                            <span>{model.vram_required} GB VRAM</span>
-                                        </div>
-
-                                        {downloading === model.id ? (
-                                            <div className="download-progress">
-                                                <div className="progress-header">
-                                                    <Loader2 className="spin" size={16} />
-                                                    <span className="progress-text">
-                                                        {downloadProgress < 100 ? 'Baixando...' : 'Finalizando...'}
-                                                    </span>
-                                                    <span className="progress-percent">{downloadProgress.toFixed(0)}%</span>
-                                                </div>
-                                                <div className="progress-bar">
-                                                    <div
-                                                        className="progress-fill"
-                                                        style={{ width: `${downloadProgress}%` }}
-                                                    />
-                                                </div>
-                                                <div className="progress-details">
-                                                    <span>{(model.size_gb * downloadProgress / 100).toFixed(1)} / {model.size_gb} GB</span>
-                                                </div>
-                                            </div>
-                                        ) : model.installed ? (
-                                            <button className="model-button installed" disabled>
-                                                <Check size={18} /> Instalado
-                                            </button>
-                                        ) : (
-                                            <button
-                                                className="model-button"
-                                                onClick={() => downloadModel(model.id)}
-                                                disabled={!!downloading}
-                                            >
-                                                <Download size={18} /> Baixar
-                                            </button>
-                                        )}
+                                {isLoading || isSearching ? (
+                                    <div className="loading-state" style={{
+                                        gridColumn: '1 / -1',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        padding: '40px',
+                                        color: 'var(--text-secondary)'
+                                    }}>
+                                        <Loader2 className="spin" size={32} style={{ marginBottom: '16px' }} />
+                                        <p>Buscando modelos...</p>
                                     </div>
-                                ))}
+                                ) : models.length === 0 ? (
+                                    <div className="empty-state">
+                                        <p>Nenhum modelo encontrado.</p>
+                                    </div>
+                                ) : (
+                                    models.map((model) => (
+                                        <div
+                                            key={model.id}
+                                            className={`model-card ${model.installed ? 'installed' : ''}`}
+                                        >
+                                            {model.installed && <span className="badge installed">Instalado</span>}
+                                            {/* Badge removido conforme solicitação */}
+
+                                            <div className="model-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <h3>{model.name}</h3>
+                                                {model.url && (
+                                                    <button
+                                                        className="model-link-btn"
+                                                        title="Ver no Hugging Face"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openUrl(model.url!);
+                                                        }}
+                                                    >
+                                                        <ExternalLink size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <p>{model.description}</p>
+
+                                            <div className="model-specs">
+                                                <span>{model.size_gb} GB</span>
+                                                <span>{model.vram_required} GB RAM</span>
+                                            </div>
+
+                                            {downloading === model.id ? (
+                                                <div className="download-progress">
+                                                    <div className="progress-header">
+                                                        <Loader2 className="spin" size={16} />
+                                                        <span className="progress-text">
+                                                            {downloadProgress < 100 ? 'Baixando...' : 'Finalizando...'}
+                                                        </span>
+                                                        <span className="progress-percent">{downloadProgress.toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="progress-bar">
+                                                        <div
+                                                            className="progress-fill"
+                                                            style={{ width: `${downloadProgress}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="progress-details">
+                                                        <span>{(model.size_gb * downloadProgress / 100).toFixed(1)} / {model.size_gb} GB</span>
+                                                    </div>
+                                                </div>
+                                            ) : model.installed ? (
+                                                <button className="model-button installed" disabled>
+                                                    <Check size={18} /> Instalado
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="model-button"
+                                                    onClick={() => downloadModel(model.id)}
+                                                    disabled={!!downloading}
+                                                >
+                                                    <Download size={18} /> Baixar
+                                                </button>
+                                            )}
+                                        </div>
+                                    )))}
                             </div>
 
                             {models.some(m => m.installed) && (
@@ -352,8 +428,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 import Onboarding from './components/Onboarding';
 import { Settings } from './components/Settings';
+import { DebugMenu } from './components/DebugMenu';
 import './App.css';
 import './components/Onboarding.css';
 
@@ -51,6 +53,9 @@ function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [tauriStatus, setTauriStatus] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [showSources, setShowSources] = useState<string | null>(null);
@@ -107,10 +112,37 @@ function App() {
       if (data.model_available) {
         setShowOnboarding(false);
       }
+
+      // Also fetch stats for debug
+      const statsRes = await fetch(`${API_URL}/status`);
+      const statsData = await statsRes.json();
+      setStats(statsData);
+
+      // Fetch tauri status if in tauri environment
+      try {
+        const tStatus = await invoke('get_backend_status');
+        setTauriStatus(tStatus);
+      } catch (e) {
+        console.warn('Tauri invoke failed (likely dev mode):', e);
+      }
     } catch {
       setHealth(null);
     }
   };
+
+  // Keyboard shortcut for debug menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+D or Option+D
+      if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        setShowDebug(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -237,6 +269,13 @@ function App() {
       onDrop={handleDrop}
     >
       <Settings isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <DebugMenu
+        isOpen={showDebug}
+        onClose={() => setShowDebug(false)}
+        health={health}
+        stats={stats}
+        tauriStatus={tauriStatus}
+      />
 
       {/* Drag Overlay */}
       <AnimatePresence>

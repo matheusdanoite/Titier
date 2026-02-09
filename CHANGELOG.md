@@ -5,6 +5,29 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-09
+
+### Adicionado
+- Integração dinâmica com Hugging Face Hub para descoberta de modelos.
+- Barra de busca dinâmica com debounce no fluxo de onboarding.
+- Filtro automático de hardware baseado na RAM do sistema.
+- Filtro de qualidade para excluir modelos menores que 3GB (experimental).
+- Links diretos para os repositórios oficiais no Hugging Face em cada card de modelo.
+- Sistema de cache dinâmico para modelos descobertos via busca.
+- Suporte a aceleração por hardware (Metal/CUDA) integrado ao workflow de release do GitHub Actions.
+
+### Alterado
+- Refinamento da UI dos cards de modelo com Flexbox para alinhamento consistente dos botões.
+- Descrições de modelos simplificadas para exibir apenas a contagem de downloads.
+- Aumento do limite de descoberta para 12 modelos simultâneos.
+- Melhoria no monitoramento de progresso de download para suportar arquivos temporários do `huggingface_hub`.
+- Consolidação de dependências do backend no `app/pyproject.toml` (incluindo `llama-cpp-python` e extensões do LlamaIndex).
+
+### Corrigido
+- Erro 404 ao tentar baixar modelos descobertos dinamicamente.
+- Erro no monitoramento de progresso que permanecia travado em 0% na interface.
+- Bug de importação (`NameError: os`) no ModelManager.
+
 ## [0.2.0] - 2026-02-09
 
 ### Adicionado

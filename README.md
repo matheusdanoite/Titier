@@ -1,6 +1,18 @@
 # 🚀 Titier
 
-**Titier** é um assistente de estudos inteligente, local e multimodal. Ele transforma seus PDFs em conhecimento acessível, permitindo que você converse com seus documentos usando Inteligência Artificial rodando 100% no seu computador.
+**O Titier é um assistente de estudos impulsionado por IA que funciona de forma 100% local e privada.** Ele transforma seus PDFs em conhecimento acessível, permitindo que você converse com seus documentos usando Inteligência Artificial rodando 100% no seu computador.
+
+## 🚀 Como Obter o Titier
+
+### Opção 1: Download do Executável (Recomendado)
+Você pode baixar as versões mais recentes prontas para uso na página de **[Releases do GitHub](https://github.com/matheusdanoite/Titier/releases)**. Temos instaladores para:
+- **Windows**: `.exe` (Suporta NVIDIA CUDA)
+- **macOS**: `.dmg` (Nativo para Apple Silicon)
+
+### Opção 2: Compilação Manual
+Se você deseja compilar o projeto do zero, siga as instruções abaixo:
+
+## 🛠 Pré-requisitos
 
 ![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-warning)
 ![License](https://img.shields.io/badge/License-MIT-blue)
@@ -128,9 +140,9 @@ O instalador estará em `frontend/src-tauri/target/release/bundle`.
 ## 📂 Estrutura do Projeto
 
 ```
-titier/
-├── app/                 # Backend Python (FastAPI + AI)
-│   ├── core/            # Lógica de IA (Inference, Agent)
+Titier/
+├── app/                 # Backend Python (FastAPI + IA)
+│   ├── core/            # Lógica de IA (Inferência, Agente)
 │   ├── db/              # Banco de Vetores (Qdrant)
 │   ├── server.py        # Entry point da API
 │   └── install.sh       # Script de setup de ambiente

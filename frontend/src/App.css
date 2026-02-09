@@ -666,4 +666,25 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
+}.model-link {
+    color: var(--text-secondary);
+    transition: color 0.2s;
+    padding: 4px;
+}
+
+.model-link:hover {
+    color: var(--primary);
+}.model-link-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.model-link-btn:hover {
+    color: var(--primary);
 }

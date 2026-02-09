@@ -485,9 +485,19 @@ async def list_models():
 
 @app.get("/models/recommended")
 async def get_recommended_models():
-    """Lista modelos recomendados com status."""
+    """Lista modelos recomendados (agora via descoberta dinâmica)."""
     manager = get_model_manager()
-    return manager.get_recommended_models()
+    # Executar descoberta em thread pool para não bloquear
+    return await asyncio.to_thread(manager.get_recommended_models)
+
+
+@app.get("/models/search")
+async def search_models(q: str):
+    """Busca modelos no Hugging Face."""
+    if not q:
+        return []
+    manager = get_model_manager()
+    return await asyncio.to_thread(manager.search_models, q)
 
 
 @app.post("/models/download/{model_id}")
@@ -678,8 +688,8 @@ async def get_embeddings_init_status():
     return _init_status["embeddings"]
 
 
-# === Server Entry ===
-if __name__ == "__main__":
+def main():
+    """Ponto de entrada para o Poetry."""
     uvicorn.run(
         "server:app",
         host="127.0.0.1",
@@ -687,3 +697,7 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
+# === Server Entry ===
+if __name__ == "__main__":
+    main()

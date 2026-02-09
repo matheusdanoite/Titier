@@ -36,9 +36,20 @@ jobs:
           pip install poetry
 
       - name: Install Python Dependencies
+        shell: bash
         run: |
           cd app
           poetry install --no-root
+          if [ "${{ matrix.os }}" == "macos-14" ]; then
+            echo "Building with Metal support for macOS..."
+            CMAKE_ARGS="-DGGML_METAL=on" poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
+          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+            echo "Building with CUDA support for Windows..."
+            # Using $env: syntax for PowerShell if it were pwsh, but here we use bash
+            # In bash on Windows (MSYS/Git Bash), we can use export
+            export CMAKE_ARGS="-DGGML_CUDA=on"
+            poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
+          fi
           poetry run pip install pyinstaller
 
       - name: Build Python Backend
@@ -48,6 +59,11 @@ jobs:
           poetry run pyinstaller server.py \
             --name titier-backend \
             --onefile \
+            --paths . \
+            --hidden-import core.inference \
+            --hidden-import core.model_manager \
+            --hidden-import core.pdf_processor \
+            --hidden-import db.vector_store \
             --collect-all llama_cpp \
             --collect-all sentence_transformers \
             --collect-all qdrant_client
@@ -83,6 +99,7 @@ jobs:
           npm run tauri build -- --target ${{ matrix.target }}
 
       - name: Rename & Finalize Assets
+        id: finalize
         shell: bash
         run: |
           # Get version digits (e.g., v0.2.0, Titier-0.2 -> 0.2.0 or 0.2)
@@ -91,6 +108,7 @@ jobs:
           if [ -z "$VERSION" ]; then VERSION="0.0.0"; fi
           echo "Detected version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
             # Primary path, fallback to search if needed
@@ -102,6 +120,7 @@ jobs:
             NEW_NAME="Titier_${VERSION}_x64.exe"
             mv "$FOUND_EXE" "$NEW_NAME"
             echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
+            echo "artifact_path=$BASE_DIR/$NEW_NAME" >> $GITHUB_OUTPUT
           else
             BASE_DIR="frontend/src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
             if [ ! -d "$BASE_DIR" ]; then BASE_DIR=$(find frontend/src-tauri/target -name dmg -type d | head -n 1); fi
@@ -111,13 +130,14 @@ jobs:
             NEW_NAME="Titier_${VERSION}_aarch64.dmg"
             mv "$FOUND_DMG" "$NEW_NAME"
             echo "ARTIFACT_PATH=$BASE_DIR/$NEW_NAME" >> $GITHUB_ENV
+            echo "artifact_path=$BASE_DIR/$NEW_NAME" >> $GITHUB_OUTPUT
           fi
 
       - name: Extract Release Notes
         shell: bash
         run: |
           # Use version digits
-          V="${{ env.VERSION }}"
+          V="$VERSION"
           if [ -z "$V" ]; then V=$(echo "${{ github.ref_name }}" | grep -oE "[0-9]+(\.[0-9]+)*" | head -n 1); fi
           echo "Searching for changelog entry starting with: $V"
 
@@ -146,7 +166,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           body_path: release_notes.md
-          files: ${{ env.ARTIFACT_PATH }}
+          files: ${{ steps.finalize.outputs.artifact_path }}
           draft: true
-          name: "Titier v${{ env.VERSION }}"
+          name: "Titier v${{ steps.finalize.outputs.version }}"
           tag_name: ${{ github.ref_name }}

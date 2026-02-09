@@ -1,0 +1,14 @@
+.model-link-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.model-link-btn:hover {
+    color: var(--primary);
+}
