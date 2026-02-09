@@ -14,8 +14,7 @@ import {
   ZoomOut,
   ChevronLeft,
   ChevronRight as ChevronRightIcon,
-  Globe,
-  FileIcon
+  Globe
 } from 'lucide-react';
 import Onboarding from './components/Onboarding';
 import { Settings } from './components/Settings';
