@@ -80,57 +80,46 @@ jobs:
             - name: Build Tauri App
               run: |
                   cd frontend
-                  npm run tauri build
+                  npm run tauri build -- --target ${{ matrix.target }}
 
-            - name: Rename Artifacts (Windows)
-              if: matrix.os == 'windows-latest'
+            - name: Rename & Finalize Assets
               shell: bash
               run: |
-                  # Find the .exe file (likely contains version and possibly language)
-                  # We want to rename it to strictly Titier_VERSION_x64.exe
+                  # Get version digits only (e.g., v0.2.0 or Titier-0.2.0 -> 0.2.0)
+                  TAG_NAME=${{ github.ref_name }}
+                  VERSION=$(echo $TAG_NAME | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+                  echo "Detected version: $VERSION"
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-                  # Get version from tag (remove v prefix)
-                  VERSION=${GITHUB_REF_NAME#v}
-
-                  cd frontend/src-tauri/target/release/bundle/nsis
-
-                  # Find the generated exe
-                  FOUND_EXE=$(ls *.exe | head -n 1)
-
-                  # Define new name
-                  NEW_NAME="Titier_${VERSION}_x64.exe"
-
-                  mv "$FOUND_EXE" "$NEW_NAME"
-                  echo "Renamed $FOUND_EXE to $NEW_NAME"
-                  echo "ARTIFACT_PATH=frontend/src-tauri/target/release/bundle/nsis/$NEW_NAME" >> $GITHUB_ENV
-
-            - name: Rename Artifacts (macOS)
-              if: matrix.os == 'macos-14'
-              shell: bash
-              run: |
-                  # Get version from tag
-                  VERSION=${GITHUB_REF_NAME#v}
-
-                  cd frontend/src-tauri/target/release/bundle/dmg
-
-                  FOUND_DMG=$(ls *.dmg | head -n 1)
-                  NEW_NAME="Titier_${VERSION}_aarch64.dmg"
-
-                  mv "$FOUND_DMG" "$NEW_NAME"
-                  echo "Renamed $FOUND_DMG to $NEW_NAME"
-                  echo "ARTIFACT_PATH=frontend/src-tauri/target/release/bundle/dmg/$NEW_NAME" >> $GITHUB_ENV
+                  if [ "${{ matrix.os }}" == "windows-latest" ]; then
+                    cd frontend/src-tauri/target/${{ matrix.target }}/release/bundle/nsis
+                    FOUND_EXE=$(ls *.exe 2>/dev/null | head -n 1)
+                    if [ -z "$FOUND_EXE" ]; then echo "Error: EXE not found"; exit 1; fi
+                    NEW_NAME="Titier_${VERSION}_x64.exe"
+                    mv "$FOUND_EXE" "$NEW_NAME"
+                    echo "ARTIFACT_PATH=frontend/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/$NEW_NAME" >> $GITHUB_ENV
+                  else
+                    cd frontend/src-tauri/target/${{ matrix.target }}/release/bundle/dmg
+                    FOUND_DMG=$(ls *.dmg 2>/dev/null | head -n 1)
+                    if [ -z "$FOUND_DMG" ]; then echo "Error: DMG not found"; exit 1; fi
+                    NEW_NAME="Titier_${VERSION}_aarch64.dmg"
+                    mv "$FOUND_DMG" "$NEW_NAME"
+                    echo "ARTIFACT_PATH=frontend/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/$NEW_NAME" >> $GITHUB_ENV
+                  fi
 
             - name: Extract Release Notes
-              id: extract_release_notes
               shell: bash
               run: |
-                  # Extract the changelog entry for this version
-                  VERSION=${GITHUB_REF_NAME#v}
-                  sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
-
-                  # If empty, just use the tag name
+                  # Use version digits
+                  V="${{ env.VERSION }}"
+                  if [ -z "$V" ]; then V=$(echo "${{ github.ref_name }}" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+"); fi
+                  echo "Extracting notes for version: $V"
+                  # Use a simpler sed command and escape brackets to satisfy YAML if needed
+                  # or just use a temporary variable
+                  SEARCH_PATTERN="## \[$V\]"
+                  sed -n "/$SEARCH_PATTERN/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
                   if [ ! -s release_notes.md ]; then
-                    echo "Release $VERSION" > release_notes.md
+                    echo "Release $V" > release_notes.md
                   fi
 
             - name: Upload Release Assets
@@ -140,4 +129,5 @@ jobs:
                   body_path: release_notes.md
                   files: ${{ env.ARTIFACT_PATH }}
                   draft: true
-                  prerelease: false
+                  name: "Titier v${{ env.VERSION }}"
+                  tag_name: ${{ github.ref_name }}
