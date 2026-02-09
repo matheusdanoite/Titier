@@ -1,0 +1,397 @@
+/* ===== Onboarding Styles ===== */
+.onboarding-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    background:
+        radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+        var(--bg-primary);
+}
+
+.onboarding-card {
+    width: 100%;
+    max-width: 900px;
+    padding: 40px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    /* Para garantir contexto de stacking se precisar */
+}
+
+.onboarding-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.onboarding-icon {
+    color: var(--accent);
+    margin-bottom: 16px;
+}
+
+.onboarding-header h1 {
+    font-size: 2rem;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.onboarding-header p {
+    color: var(--text-secondary);
+}
+
+/* Steps Indicator */
+.steps-indicator {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.step-dot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.step-dot .dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--glass-bg);
+    border: 2px solid var(--glass-border);
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.step-dot.active .dot {
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border-color: transparent;
+}
+
+.step-dot span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.step-dot.active span {
+    color: var(--text-primary);
+}
+
+/* Step Content */
+.step-content {
+    min-height: 300px;
+}
+
+.step-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.step-description {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+/* Status List */
+.status-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--glass-bg);
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    transition: all 0.2s;
+    height: 100%;
+}
+
+.status-item.completed {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.status-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.status-title {
+    font-weight: 600;
+}
+
+.status-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* Models Grid */
+.models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+    /* max-height removido para deixar o card controlar o scroll */
+    /* max-height: 500px; */
+    /* overflow-y: auto; */
+    padding-right: 8px;
+}
+
+.model-card {
+    position: relative;
+    padding: 20px;
+    background: var(--glass-bg);
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    transition: all 0.2s ease;
+}
+
+.model-card.recommended {
+    border-color: var(--accent);
+}
+
+.model-card.installed {
+    border-color: rgba(34, 197, 94, 0.5);
+}
+
+.model-card .badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 20px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+}
+
+.model-card .badge.installed {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.model-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+
+.model-card p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.model-specs {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.model-specs span {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    color: var(--text-secondary);
+}
+
+.model-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.model-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.model-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.model-button.installed {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+/* Download Progress */
+.download-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-text {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.progress-percent {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #8b5cf6);
+    transition: width 0.3s ease;
+    animation: progressPulse 2s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.progress-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Buttons */
+.primary-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 16px;
+}
+
+.primary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.primary-button.large {
+    padding: 18px 32px;
+    font-size: 1.1rem;
+}
+
+/* Final Step */
+.final-step {
+    text-align: center;
+}
+
+.success-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border-radius: 50%;
+}
+
+.success-icon svg {
+    color: white;
+}
+
+/* Embeddings Card */
+.embeddings-card {
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.embeddings-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.embeddings-icon {
+    color: var(--accent);
+}
+
+.embeddings-info h3 {
+    font-size: 1.2rem;
+    margin-bottom: 4px;
+}
+
+.embeddings-info p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Error Banner */
+.error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #ef4444;
+    margin-bottom: 16px;
+}
+
+/* Text Colors */
+.text-green-400 {
+    color: #4ade80;
+}
