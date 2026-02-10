@@ -35,13 +35,6 @@ jobs:
         run: |
           pip install poetry
 
-      - name: Setup Ccache
-        if: matrix.os != 'windows-latest'
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ matrix.os }}-${{ matrix.target }}
-          max-size: "500M"
-
       - name: Setup CUDA Toolkit (Windows)
         if: matrix.os == 'windows-latest'
         uses: Jimver/cuda-toolkit@v0.2.19
@@ -54,8 +47,6 @@ jobs:
         shell: bash
         run: |
           cd app
-
-          # ccache is already configured via hendrikmuhs/ccache-action PATH symlinks
 
           poetry install --no-root
 
@@ -71,10 +62,15 @@ jobs:
             
           elif [ "${{ matrix.os }}" == "windows-latest" ]; then
             echo "Building with CUDA support for Windows..."
-            echo "CUDA path: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
-            export CMAKE_ARGS="-DGGML_CUDA=on"
-            export CUDA_PATH="${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
+            echo "CUDA path from step output: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
+            ls -R "${{ steps.cuda-toolkit.outputs.CUDA_PATH }}" || echo "ls failed"
+            
             export CUDAToolkit_ROOT="${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
+            export CUDA_PATH="${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
+            
+            # Explicitly pass toolkit root to CMake args
+            export CMAKE_ARGS="-DGGML_CUDA=on -DCUDAToolkit_ROOT=${{ steps.cuda-toolkit.outputs.CUDA_PATH }} -DCMAKE_CUDA_COMPILER=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}/bin/nvcc.exe"
+
             
             # Llama.cpp with CUDA
             poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
