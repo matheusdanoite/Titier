@@ -5,6 +5,56 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-09
+
+### Adicionado
+
+#### Interface & Experiência do Usuário
+- **Tela de Estado Vazio (`EmptyState`):** Nova visualização full-screen quando nenhum PDF está carregado, com ícone de upload, texto destacado, suporte a drag-and-drop, e atalho para configurações.
+- **Tela de Processamento (`ProcessingView`):** Animação premium exibida durante a análise de documentos, com anéis orbitais, efeito de varredura (scan line), barra de progresso shimmer, e status em tempo real.
+- **Customização de System Prompts:** Nova aba "Prompts" nas Configurações, permitindo ao usuário personalizar os prompts de sistema (RAG, Base, Visão) com restauração de padrões.
+- **Resumo Automático Estruturado:** Ao abrir um PDF, o Titier gera automaticamente um resumo com seções: Visão Geral, Pontos-Chave, Resumo Detalhado, e Conclusões.
+
+#### Processamento de Documentos
+- **Extração de Destaques (Highlights):** Novo sistema que captura textos grifados, suas cores (amarelo, verde, azul, etc.) e anotações associadas dos PDFs.
+- **Filtro por Cor de Destaque:** Consultas podem ser filtradas por cor de grifo (ex: "o que está grifado em amarelo?") com detecção automática de intenção.
+- **Integração PaddleOCR-VL-1.5:** Motor de OCR visual avançado para extração de tabelas, layouts complexos e PDFs escaneados.
+- **OCR Híbrido com Fallback:** Prioridade automática para VisionOCR (PaddleOCR), com fallback transparente para RapidOCR (CPU otimizado).
+- **Limpeza de Texto e Remoção de Cabeçalhos/Rodapés:** Sistema heurístico no PyMuPDF para identificar e ignorar elementos repetitivos em múltiplas páginas.
+- **Filtragem por Margem:** Suporte para ignorar áreas específicas da página durante a extração de texto.
+- **Ordenação Inteligente de Blocos:** Extração de texto respeita a ordem natural de leitura (Y, depois X), melhorando a coerência em documentos com colunas.
+- **Logs de Progresso de OCR:** Acompanhamento em tempo real no terminal (`Página X/Y`, tempo por página e tempo total).
+
+#### Backend & Otimização
+- **Detecção Dinâmica de Hardware:** Módulo `hardware.py` que detecta automaticamente RAM, VRAM (Metal/CUDA), e CPU cores.
+- **Perfis de Hardware Automáticos:** Sistema classifica hardware em 4 tiers (LOW/MEDIUM/HIGH/ULTRA) com parâmetros otimizados.
+- **Smart Layer Offloading:** `n_gpu_layers` calculado dinamicamente baseado na VRAM disponível.
+- **KV Cache Quantizado:** Tiers HIGH/ULTRA usam cache Q8_0 para reduzir uso de VRAM.
+- **Flash Attention:** Habilitado automaticamente quando disponível.
+- **Endpoint `/api/hardware`:** Expõe informações detalhadas do hardware e configurações calculadas.
+- **Endpoints de Status OCR:** `/ocr/vision/status` e `/ocr/status` para monitoramento dos motores de OCR.
+- **Chunking Adaptativo (Hardware-Aware):** Tamanho dos chunks escala com o hardware (100 a 300 palavras).
+- **Otimização para Macs de 8GB (M1/M2):** Recomendação automática do Llama 3.2 3B.
+
+### Alterado
+- **Prompts RAG Refinados:** Novas diretrizes incluem preservação de termos técnicos, organização hierárquica, e captura de nuances ao resumir.
+- **Motor de Visão Padrão:** Substituído MiniCPM-V por PaddleOCR-VL-1.5 para melhor compatibilidade.
+- **`n_ctx` Dinâmico:** Janela de contexto calculada automaticamente (2K-16K+) baseada na memória disponível.
+- **`n_batch` Otimizado:** Valor ajustado por tier (128-1024) para melhor throughput.
+- **Threading Inteligente:** `n_threads` e `n_threads_batch` configurados baseado nos cores da CPU.
+- **LLMEngine Refatorado:** Aceita parâmetros opcionais e usa valores auto-detectados como padrão.
+- **Limite Dinâmico de RAG:** O número de chunks recuperados é ajustado automaticamente pelo tamanho da janela de contexto do modelo (2 a 20 chunks).
+
+### Corrigido
+- **Processamento de PDFs Escaneados:** Corrigido bug onde arquivos sem camada de texto falhavam na extração.
+- **Download de Modelos Non-GGUF:** Corrigido erro `KeyError: 'filename'` ao baixar modelos de hubs externos.
+- **Compatibilidade NumPy:** Downgrade automático para NumPy < 2.0 para compatibilidade com PaddleOCR.
+- **Progresso de Download:** Corrigido bug onde a UI ficava travada em 0% — agora monitora recursivamente diretórios de cache.
+- **Suporte GPU (Metal/CUDA):** Corrigido reporte incorreto do backend de GPU no frontend.
+- Uso excessivo de VRAM em modelos grandes evitado via offload automático para RAM.
+
+---
+
 ## [0.4.0] - 2026-02-09
 
 ### Adicionado

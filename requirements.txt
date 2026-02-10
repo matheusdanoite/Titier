@@ -16,3 +16,6 @@ python-dotenv
 pydantic
 requests
 huggingface_hub
+
+# Hardware Detection
+psutil>=5.9.0

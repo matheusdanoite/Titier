@@ -52,7 +52,7 @@ def get_backend_info() -> dict:
 class LLMEngine:
     """
     Motor de inferência usando llama-cpp-python.
-    Detecta automaticamente o backend (Metal/CUDA/CPU).
+    Detecta automaticamente o backend (Metal/CUDA/CPU) e otimiza parâmetros.
     """
     
     DEFAULT_MODEL_DIR = Path.home() / ".titier" / "models"
@@ -60,16 +60,47 @@ class LLMEngine:
     def __init__(
         self, 
         model_path: Optional[str] = None,
-        n_ctx: int = 8192,
-        n_gpu_layers: int = -1,
+        n_ctx: Optional[int] = None,  # Auto-detectado se None
+        n_gpu_layers: Optional[int] = None,  # Auto-detectado se None
+        n_batch: Optional[int] = None,
+        n_threads: Optional[int] = None,
+        use_mmap: Optional[bool] = None,
+        use_mlock: Optional[bool] = None,
+        flash_attn: Optional[bool] = None,
         verbose: bool = False
     ):
+        from .hardware import detect_hardware_profile, print_hardware_summary
+        
         self.model_path = model_path
-        self.n_ctx = n_ctx
-        self.n_gpu_layers = n_gpu_layers if n_gpu_layers != -1 else get_gpu_layers()
         self.verbose = verbose
         self.llm = None
         self._backend_info = get_backend_info()
+        
+        # Detectar perfil de hardware otimizado
+        self._hw_profile = detect_hardware_profile(model_path)
+        
+        # Usar valores do perfil ou override manual
+        self.n_ctx = n_ctx or self._hw_profile.n_ctx
+        self.n_gpu_layers = n_gpu_layers if n_gpu_layers is not None else self._hw_profile.n_gpu_layers
+        self.n_batch = n_batch or self._hw_profile.n_batch
+        self.n_threads = n_threads or self._hw_profile.n_threads
+        self.n_threads_batch = self._hw_profile.n_threads_batch
+        self.use_mmap = use_mmap if use_mmap is not None else self._hw_profile.use_mmap
+        self.use_mlock = use_mlock if use_mlock is not None else self._hw_profile.use_mlock
+        self.flash_attn = flash_attn if flash_attn is not None else self._hw_profile.flash_attn
+        self.offload_kqv = self._hw_profile.offload_kqv
+        self.type_k = self._hw_profile.type_k
+        self.type_v = self._hw_profile.type_v
+        self.mul_mat_q = self._hw_profile.mul_mat_q
+        
+        # Log do perfil detectado
+        if verbose:
+            print_hardware_summary(self._hw_profile)
+        
+    @property
+    def hardware_profile(self):
+        """Retorna o perfil de hardware detectado."""
+        return self._hw_profile
         
     @property
     def backend(self) -> str:
@@ -80,8 +111,9 @@ class LLMEngine:
         return self._backend_info["gpu_available"]
     
     def load(self, model_path: Optional[str] = None) -> "LLMEngine":
-        """Carrega o modelo na memória/GPU."""
+        """Carrega o modelo na memória/GPU com parâmetros otimizados."""
         from llama_cpp import Llama
+        from .hardware import get_ggml_type, detect_hardware_profile
         
         path = model_path or self.model_path
         if not path:
@@ -90,16 +122,57 @@ class LLMEngine:
         if not Path(path).exists():
             raise FileNotFoundError(f"Modelo não encontrado: {path}")
         
-        print(f"[LLM] Carregando modelo: {Path(path).name}")
-        print(f"[LLM] Backend: {self.backend.upper()}, GPU Layers: {self.n_gpu_layers}")
+        # Recalcular perfil para o modelo específico se diferente
+        if path != self.model_path:
+            self._hw_profile = detect_hardware_profile(path)
+            self.n_gpu_layers = self._hw_profile.n_gpu_layers
+            self.n_ctx = self._hw_profile.n_ctx
         
-        self.llm = Llama(
-            model_path=str(path),
-            n_ctx=self.n_ctx,
-            n_gpu_layers=self.n_gpu_layers,
-            verbose=self.verbose,
-            # Chat format será detectado automaticamente
-        )
+        print(f"[LLM] Carregando modelo: {Path(path).name}")
+        print(f"[LLM] Backend: {self.backend.upper()}, Tier: {self._hw_profile.tier.value.upper()}")
+        print(f"[LLM] GPU Layers: {self.n_gpu_layers}, n_ctx: {self.n_ctx}, n_batch: {self.n_batch}")
+        print(f"[LLM] Threads: {self.n_threads}, Flash Attn: {self.flash_attn}, KV Type: {self.type_k or 'F16'}")
+        
+        # Preparar argumentos opcionais
+        llama_kwargs = {
+            "model_path": str(path),
+            "n_ctx": self.n_ctx,
+            "n_gpu_layers": self.n_gpu_layers,
+            "n_batch": self.n_batch,
+            "n_threads": self.n_threads,
+            "n_threads_batch": self.n_threads_batch,
+            "use_mmap": self.use_mmap,
+            "use_mlock": self.use_mlock,
+            "mul_mat_q": self.mul_mat_q,
+            "offload_kqv": self.offload_kqv,
+            "verbose": self.verbose,
+        }
+        
+        # Flash Attention (pode não estar disponível em todas as builds)
+        if self.flash_attn:
+            llama_kwargs["flash_attn"] = True
+        
+        # KV cache quantization (se disponível)
+        type_k = get_ggml_type(self.type_k)
+        type_v = get_ggml_type(self.type_v)
+        if type_k is not None:
+            llama_kwargs["type_k"] = type_k
+        if type_v is not None:
+            llama_kwargs["type_v"] = type_v
+        
+        try:
+            self.llm = Llama(**llama_kwargs)
+        except TypeError as e:
+            # Fallback se algum parâmetro não for suportado
+            print(f"[LLM] Aviso: Parâmetro não suportado, usando fallback: {e}")
+            self.llm = Llama(
+                model_path=str(path),
+                n_ctx=self.n_ctx,
+                n_gpu_layers=self.n_gpu_layers,
+                n_batch=self.n_batch,
+                n_threads=self.n_threads,
+                verbose=self.verbose,
+            )
         
         print(f"[LLM] Modelo carregado com sucesso!")
         return self
@@ -168,40 +241,50 @@ class LLMEngine:
         max_tokens: int = 512,
         temperature: float = 0.7
     ) -> AsyncGenerator[str, None]:
-        """Chat completion com streaming."""
+        """Chat completion com streaming e contagem robusta de tokens."""
         if not self.llm:
             raise RuntimeError("Modelo não carregado. Chame load() primeiro.")
         
-        # Calcular tokens disponíveis
+        # 1. Contagem robusta de tokens usando o chat handler ou template
+        try:
+            # Tentar formatar o chat primeiro para contar tokens reais com tags
+            formatted_chat = self.llm.chat_handler.apply_chat_template(messages) if hasattr(self.llm, 'chat_handler') and self.llm.chat_handler else str(messages)
+            prompt_tokens = len(self.llm.tokenize(formatted_chat.encode("utf-8")))
+        except Exception as e:
+            print(f"[LLM] Erro na tokenização precisa: {e}. Usando estimativa.")
+            prompt_tokens = len(str(messages)) // 3 # Estimativa conservadora (3 chars per token)
+        
         n_ctx = self.llm.n_ctx()
-        prompt_tokens = len(self.llm.tokenize(
-            str(messages).encode("utf-8") 
-        )) # Aproximação rápida
-        
-        print(f"[LLM] Contexto Max: {n_ctx}, Prompt (aprox): {prompt_tokens}")
+        print(f"[LLM] Contexto Max: {n_ctx}, Prompt Real: {prompt_tokens}")
 
-        available_tokens = n_ctx - prompt_tokens - 100 # Buffer de segurança
-        print(f"[LLM] Tokens disponíveis para geração: {available_tokens}")
+        # Buffer de segurança maior (200 tokens) para evitar limite físico do KV cache
+        available_tokens = n_ctx - prompt_tokens - 200 
         
-        if available_tokens < 100:
+        if available_tokens < 50:
             print("[LLM] Erro: Contexto insuficiente")
-            yield "Erro: Contexto muito longo para o modelo processar. Tente reduzir o tamanho do texto ou das mensagens anteriores."
+            yield "⚠️ **Erro de Contexto**: O texto pesquisado nos documentos é muito grande para o limite de memória da IA atual. Tente fazer uma pergunta mais específica ou reduzir o número de documentos selecionados."
             return
 
         final_max_tokens = min(max_tokens, available_tokens)
-        print(f"[LLM] Max tokens final: {final_max_tokens}")
+        print(f"[LLM] Tokens disponíveis para geração: {available_tokens}, Limitando a: {final_max_tokens}")
         
         print("[LLM] Iniciando geração...")
-        for chunk in self.llm.create_chat_completion(
-            messages=messages,
-            max_tokens=final_max_tokens,
-            temperature=temperature,
-            stream=True
-        ):
-            if "content" in chunk["choices"][0]["delta"]:
-                token = chunk["choices"][0]["delta"]["content"]
-                # print(f"[Debug] Token: {token}", end="", flush=True) 
-                yield token
+        try:
+            for chunk in self.llm.create_chat_completion(
+                messages=messages,
+                max_tokens=final_max_tokens,
+                temperature=temperature,
+                stream=True
+            ):
+                if "content" in chunk["choices"][0]["delta"]:
+                    token = chunk["choices"][0]["delta"]["content"]
+                    yield token
+        except RuntimeError as e:
+            if "-3" in str(e) or "llama_decode" in str(e):
+                print(f"[LLM] Erro crítico de decodificação capturado: {e}")
+                yield "\n\n⚠️ **Limite de Memória Atingido**: A IA não conseguiu completar a resposta porque o limite de contexto foi excedido durante a fala. Tente uma pergunta que exija menos contexto do documento."
+            else:
+                raise e
     
     def unload(self):
         """Libera o modelo da memória."""
@@ -237,39 +320,70 @@ class MultimodalEngine(LLMEngine):
         if not Path(path).exists():
             raise FileNotFoundError(f"Modelo não encontrado: {path}")
         
+        model_name = Path(path).name.lower()
         print(f"[Vision] Carregando modelo multimodal: {Path(path).name}")
         print(f"[Vision] Backend: {self.backend.upper()}")
         
-        # Tentar carregar o chat handler para MiniCPM-V
+        # Detectar tipo de modelo e configurar handler apropriado
+        chat_format = None
+        self.chat_handler = None
+        
+        # MiniCPM-V requer handler especial
+        if "minicpm" in model_name:
+            try:
+                from llama_cpp.llama_chat_format import MiniCPMv26ChatHandler
+                
+                clip_path = self.mmproj_path
+                if not clip_path or not Path(clip_path).exists():
+                    clip_path = path
+                
+                print(f"[Vision] Usando MiniCPM handler com clip_path: {Path(clip_path).name}", flush=True)
+                self.chat_handler = MiniCPMv26ChatHandler(
+                    clip_model_path=str(clip_path)
+                )
+                chat_format = "minicpm-v-2.6"
+            except ImportError:
+                print("[Vision] MiniCPM handler não disponível", flush=True)
+            except Exception as e:
+                print(f"[Vision] Erro ao inicializar MiniCPM handler: {e}", flush=True)
+        
+        # PaddleOCR-VL e outros modelos de visão usam modo básico
+        elif "paddleocr" in model_name or "ocr" in model_name:
+            print("[Vision] Modelo OCR detectado - usando modo básico (sem chat handler)", flush=True)
+            # PaddleOCR-VL não precisa de handler especial, funciona com completion básico
+            chat_format = None
+        
+        # Outros modelos de visão genéricos
+        else:
+            print("[Vision] Modelo de visão genérico - tentando modo básico", flush=True)
+        
+        print(f"[Vision] Tier: {self._hw_profile.tier.value.upper()}, GPU Layers: {self.n_gpu_layers}, n_ctx: {self.n_ctx}")
+        
+        # Usar parâmetros otimizados do hardware profile
         try:
-            from llama_cpp.llama_chat_format import MiniCPMv26ChatHandler
-            import sys
-            
-            # Se mmproj_path não for fornecido, tentar usar o próprio modelo (embedded projector)
-            clip_path = self.mmproj_path
-            if not clip_path or not Path(clip_path).exists():
-                clip_path = path
-            
-            print(f"[Vision] Usando clip_path: {Path(clip_path).name}", flush=True)
-            self.chat_handler = MiniCPMv26ChatHandler(
-                clip_model_path=str(clip_path)
+            self.llm = Llama(
+                model_path=str(path),
+                n_ctx=self.n_ctx,
+                n_gpu_layers=self.n_gpu_layers,
+                n_batch=self.n_batch,
+                n_threads=self.n_threads,
+                use_mmap=self.use_mmap,
+                chat_format=chat_format,
+                chat_handler=self.chat_handler,
+                verbose=self.verbose
             )
-        except ImportError:
-            print("[Vision] Chat handler não disponível (ImportError), usando modo básico", flush=True)
         except Exception as e:
-            print(f"[Vision] Erro ao inicializar chat handler: {e}", flush=True)
-        
-        # Só definir chat_format se tivermos o handler, caso contrário o llama-cpp vai reclamar
-        chat_format = "minicpm-v-2.6" if self.chat_handler else None
-        
-        self.llm = Llama(
-            model_path=str(path),
-            n_ctx=self.n_ctx,
-            n_gpu_layers=self.n_gpu_layers,
-            chat_format=chat_format,
-            chat_handler=self.chat_handler,
-            verbose=self.verbose
-        )
+            print(f"[Vision] Erro ao carregar com parâmetros otimizados: {e}")
+            # Fallback mais simples
+            try:
+                self.llm = Llama(
+                    model_path=str(path),
+                    n_ctx=4096,  # Contexto menor para modelos OCR
+                    n_gpu_layers=self.n_gpu_layers,
+                    verbose=self.verbose
+                )
+            except Exception as e2:
+                raise RuntimeError(f"Falha ao carregar modelo de visão: {e2}")
         
         print(f"[Vision] Modelo carregado com sucesso!")
         return self
@@ -297,7 +411,8 @@ class MultimodalEngine(LLMEngine):
         mime_types = {".jpg": "jpeg", ".jpeg": "jpeg", ".png": "png", ".gif": "gif"}
         mime = mime_types.get(ext, "jpeg")
         
-        system_prompt = "Você é um assistente de visão computacional. Responda sempre em JSON válido." if json_schema else None
+        from .prompts import get_prompts
+        system_prompt = get_prompts()["system_vision"] if json_schema else None
         
         messages = []
         if system_prompt:

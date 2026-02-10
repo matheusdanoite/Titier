@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Loader2, Sparkles, Search, ExternalLink, Check, AlertCircle, Database, ChevronRight } from 'lucide-react';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { Download, Loader2, Sparkles, Check, AlertCircle, Database, ChevronRight } from 'lucide-react';
 
 interface OnboardingStep {
     id: string;
@@ -43,26 +42,21 @@ interface DownloadStatus {
 export function Onboarding({ onComplete }: OnboardingProps) {
     const [step, setStep] = useState(0);
     const [steps, setSteps] = useState<OnboardingStep[]>([]);
-    const [models, setModels] = useState<Model[]>([]);
     const [downloads, setDownloads] = useState<Record<string, DownloadStatus>>({});
     const [error, setError] = useState<string | null>(null);
     const [initializingEmbeddings, setInitializingEmbeddings] = useState(false);
     const [embeddingsProgress, setEmbeddingsProgress] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Search state
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSearching, setIsSearching] = useState(false);
-    const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [gpuAvailable, setGpuAvailable] = useState<string | boolean>(false);
+    const [recommendedLLM, setRecommendedLLM] = useState<Model | null>(null);
 
     // Featured models defaults
     const DEFAULT_LLM: Model = {
-        id: "llama-3.2-3b",
-        name: "Llama 3.2 3B Instruct",
-        description: "Modelo inteligente e extremamente rápido, ideal para a maioria dos computadores.",
-        size_gb: 2.0,
-        vram_required: 4,
+        id: "llama-3.1-8b-q5",
+        name: "Llama 3.1 8B Instruct (Q5)",
+        description: "Modelo otimizado (8GB VRAM), ideal para sua RTX 5060.",
+        size_gb: 5.7,
+        vram_required: 8,
         installed: false,
         recommended: true
     };
@@ -81,43 +75,35 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
     useEffect(() => {
         fetchOnboardingStatus();
-    }, []);
 
-    useEffect(() => {
-        if (step === 1 && showAdvanced) fetchModels();
-        if (step === 2 && showAdvanced) fetchOCRModels();
-    }, [step, showAdvanced]);
-
-    const handleSearch = (query: string) => {
-        setSearchQuery(query);
-        if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-        if (!query.trim()) {
-            if (step === 1) fetchModels();
-            if (step === 2) fetchOCRModels();
-            return;
-        }
-
-        setIsSearching(true);
-        searchTimeout.current = setTimeout(async () => {
+        // Polling para status de downloads global
+        const interval = setInterval(async () => {
             try {
-                const endpoint = step === 2 ? 'ocr/search' : 'search';
-                const res = await fetch(`${API_URL}/models/${endpoint}?q=${encodeURIComponent(query)}`);
-                const data = await res.json();
-                setModels(data);
+                const res = await fetch(`${API_URL}/models/download/status`);
+                if (res.ok) {
+                    const data = await res.json();
+                    // Transformar array em mapa por model_id
+                    const downloadsMap: Record<string, DownloadStatus> = {};
+                    data.forEach((d: any) => {
+                        downloadsMap[d.model_id] = d;
+                    });
+                    setDownloads(downloadsMap);
+                }
             } catch (err) {
-                console.error("Erro na busca:", err);
-            } finally {
-                setIsSearching(false);
+                console.error("Erro ao buscar status de downloads:", err);
             }
-        }, 500); // Debounce 500ms
-    };
+        }, 1000); // 1 segundo
+
+        return () => clearInterval(interval);
+    }, []);
 
     const fetchOnboardingStatus = async () => {
         try {
             const res = await fetch(`${API_URL}/onboarding/status`);
             const data = await res.json();
             setSteps(data.steps);
+            setGpuAvailable(data.gpu);
+            if (data.recommended_llm) setRecommendedLLM(data.recommended_llm);
 
             if (data.ready_to_chat) {
                 onComplete();
@@ -127,29 +113,41 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         }
     };
 
-    const fetchModels = async () => {
-        setIsLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/models/recommended`);
-            const data = await res.json();
-            setModels(data);
-        } catch (err) {
-            console.error('Erro ao buscar modelos:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
-    const fetchOCRModels = async () => {
-        setIsLoading(true);
+
+    const [importPath, setImportPath] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleImport = async () => {
+        if (!importPath.trim()) return;
+
+        setIsImporting(true);
+        setError(null);
+
         try {
-            const res = await fetch(`${API_URL}/models/ocr/recommended`);
-            const data = await res.json();
-            setModels(data);
-        } catch (err) {
-            console.error('Erro ao buscar modelos OCR:', err);
+            // Remover aspas que podem vir ao copiar caminho no Windows
+            const cleanPath = importPath.replace(/^"|"$/g, '').trim();
+
+            const res = await fetch(`${API_URL}/models/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: cleanPath })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao importar');
+            }
+
+            // Sucesso
+            setImportPath('');
+            fetchOnboardingStatus();
+            setStep(prev => prev + 1);
+
+        } catch (err: any) {
+            setError(err.message || 'Erro ao importar modelo');
         } finally {
-            setIsLoading(false);
+            setIsImporting(false);
         }
     };
 
@@ -162,13 +160,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             });
             const data = await response.json();
 
-            if (data.status === 'already_installed') {
+            if (data.status === 'already_installed' || data.status === 'paddleocr_model') {
+                console.log("Model already installed or is PaddleOCR, advancing step", data);
                 fetchOnboardingStatus();
                 setStep(prev => prev + 1);
                 return;
             }
 
+            console.log("Download started response:", data);
             if (data.status === 'started') {
+                console.log("Status is started, advancing step");
                 setStep(prev => prev + 1); // Avança automaticamente para o próximo passo
 
                 // Inicializar status no estado local
@@ -176,35 +177,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     ...prev,
                     [modelId]: { status: 'pending', progress: 0, downloaded_mb: 0, total_mb: 0, speed_mbps: 0 }
                 }));
+            } else {
+                console.warn("Unknown status:", data.status);
+                setError(`Resposta inesperada do servidor: ${data.status || 'sem status'}`);
             }
-
-            const pollProgress = async () => {
-                try {
-                    const statusRes = await fetch(`${API_URL}/models/download/${modelId}/status`);
-                    const status = await statusRes.json();
-
-                    setDownloads(prev => ({
-                        ...prev,
-                        [modelId]: status
-                    }));
-
-                    if (status.status === 'downloading' || status.status === 'pending') {
-                        setTimeout(pollProgress, 1000);
-                    } else if (status.status === 'completed') {
-                        setTimeout(() => {
-                            fetchOnboardingStatus();
-                        }, 1000);
-                    } else if (status.status === 'failed') {
-                        setError(status.error || 'Erro no download');
-                    }
-                } catch (e) {
-                    console.error('Erro no polling:', e);
-                }
-            };
-
-            setTimeout(pollProgress, 2000);
-        } catch (err) {
-            setError('Erro ao iniciar download');
+        } catch (err: any) {
+            console.error('Erro ao iniciar download:', err);
+            setError(`Falha ao conectar ao servidor: ${err.message}`);
+            window.alert(`Erro ao iniciar download: \n${err.message}`);
         }
     };
 
@@ -251,7 +231,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return steps.find(s => s.id === stepId)?.completed || false;
     };
 
-    const featuredModel = step === 1 ? DEFAULT_LLM : DEFAULT_OCR;
+    const isAnyDownloadActive = Object.values(downloads).some(
+        d => d.status === 'downloading' || d.status === 'pending'
+    );
+
+    const featuredModel = step === 1 ? (recommendedLLM || DEFAULT_LLM) : DEFAULT_OCR;
     const isFeaturedInstalled = isStepCompleted(step === 1 ? 'llm' : 'ocr');
 
     return (
@@ -267,6 +251,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         <Sparkles size={40} className="onboarding-icon" />
                         <h1>Bem-vindo ao Titier</h1>
                         <p>Vamos configurar seu assistente de estudos</p>
+
+                        {steps.length > 0 && (
+                            <div className="gpu-badge">
+                                <Sparkles size={14} />
+                                Aceleração por Hardware: <span>{gpuAvailable ? `Ativada (${gpuAvailable})` : 'Detectando...'}</span>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -281,7 +272,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         let showProgress = false;
 
                         if (i === 1) {
-                            const llmId = DEFAULT_LLM.id;
+                            const llmId = (recommendedLLM || DEFAULT_LLM).id;
                             if (downloads[llmId] && (downloads[llmId].status === 'downloading' || downloads[llmId].status === 'pending')) {
                                 showProgress = true;
                                 activeProgress = downloads[llmId].progress || 0;
@@ -299,7 +290,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                             }
                         }
 
-                        const radius = 18;
+                        const radius = 18; // Reverted to 18 (44px total), kept thicker stroke
                         const circumference = 2 * Math.PI * radius;
                         const offset = circumference - (activeProgress / 100) * circumference;
 
@@ -308,10 +299,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                 <div className="dot-container">
                                     {showProgress && (
                                         <svg className="progress-ring" width="44" height="44">
+                                            {/* Background circle for context */}
+                                            <circle
+                                                stroke="var(--glass-border)"
+                                                strokeWidth="6"
+                                                fill="transparent"
+                                                r={radius}
+                                                cx="22"
+                                                cy="22"
+                                            />
                                             <circle
                                                 className="progress-ring__circle"
                                                 stroke="var(--accent)"
-                                                strokeWidth="2"
+                                                strokeWidth="6"
+                                                strokeLinecap="round"
                                                 fill="transparent"
                                                 r={radius}
                                                 cx="22"
@@ -397,29 +398,41 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                             <span>Baixando {downloads[featuredModel.id].progress.toFixed(0)}%</span>
                                         </div>
                                     ) : isFeaturedInstalled ? (
-                                        <button className="model-button installed" disabled>
-                                            <Check size={18} /> Já Instalado
-                                        </button>
+                                        <div className="model-status-installed">
+                                            <button className="model-button installed" disabled>
+                                                <Check size={18} /> Já Instalado
+                                            </button>
+                                            {/* Permite baixar o recomendado mesmo se já tiver outro modelo */}
+                                            {steps.find(s => s.id === (step === 1 ? 'llm' : 'ocr'))?.completed && !downloads[featuredModel.id] && (
+                                                <p className="status-note">Você já possui um modelo configurado, mas pode baixar este se desejar.</p>
+                                            )}
+                                        </div>
                                     ) : (
                                         <button
                                             className="primary-button"
                                             onClick={() => downloadModel(featuredModel.id)}
-                                            disabled={!!downloads[featuredModel.id]}
+                                            disabled={downloads[featuredModel.id]?.status === 'downloading' || downloads[featuredModel.id]?.status === 'pending'}
                                         >
-                                            <Download size={18} /> Instalar Agora
+                                            {downloads[featuredModel.id]?.status === 'failed' ? (
+                                                <><AlertCircle size={18} /> Tentar Novamente</>
+                                            ) : (
+                                                <><Download size={18} /> Instalar Agora</>
+                                            )}
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Advanced Toggle */}
+                            {/* Import Manually */}
                             <div className="advanced-options">
-                                <button
-                                    className="text-button"
-                                    onClick={() => setShowAdvanced(!showAdvanced)}
-                                >
-                                    {showAdvanced ? 'Esconder outros modelos' : 'Desejo escolher outro modelo'}
-                                </button>
+                                {step === 1 && (
+                                    <button
+                                        className="text-button"
+                                        onClick={() => setShowAdvanced(!showAdvanced)}
+                                    >
+                                        {showAdvanced ? 'Cancelar Importação' : 'Já possuo um modelo (Importar .gguf)'}
+                                    </button>
+                                )}
                             </div>
 
                             {showAdvanced && (
@@ -428,51 +441,27 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                     animate={{ opacity: 1, height: 'auto' }}
                                     className="advanced-section"
                                 >
-                                    <div className="search-bar-container">
-                                        <Search className="search-icon" size={20} />
-                                        <input
-                                            type="text"
-                                            placeholder="Pesquisar outros modelos..."
-                                            value={searchQuery}
-                                            onChange={(e) => handleSearch(e.target.value)}
-                                            className="search-input"
-                                        />
-                                        {isSearching && <Loader2 className="spin" size={18} />}
-                                    </div>
+                                    <div className="import-section glass-panel">
+                                        <h4>Importar Modelo Local</h4>
+                                        <p>Cole o caminho completo do arquivo .gguf no seu computador.</p>
 
-                                    <div className="models-grid mini">
-                                        {isLoading || isSearching ? (
-                                            <div className="loading-state">
-                                                <Loader2 className="spin" size={24} />
-                                            </div>
-                                        ) : (
-                                            models.filter(m => m.id !== featuredModel.id).map((model) => (
-                                                <div
-                                                    key={model.id}
-                                                    className={`model-card mini ${model.installed ? 'installed' : ''}`}
-                                                >
-                                                    <div className="model-header">
-                                                        <h4>{model.name}</h4>
-                                                        {model.installed ? (
-                                                            <Check size={16} className="text-green-400" />
-                                                        ) : downloads[model.id] && (downloads[model.id].status === 'downloading' || downloads[model.id].status === 'pending') ? (
-                                                            <div className="compact-download-status mini">
-                                                                <Loader2 className="spin" size={12} />
-                                                                <span>{downloads[model.id].progress.toFixed(0)}%</span>
-                                                            </div>
-                                                        ) : (
-                                                            <button
-                                                                className="icon-button"
-                                                                onClick={() => downloadModel(model.id)}
-                                                                disabled={Object.values(downloads).some(d => d.status === 'downloading' || d.status === 'pending')}
-                                                            >
-                                                                <Download size={16} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
+                                        <div className="search-bar-container">
+                                            <input
+                                                type="text"
+                                                placeholder="C:\Users\Nome\Downloads\modelo.gguf"
+                                                value={importPath}
+                                                onChange={(e) => setImportPath(e.target.value)}
+                                                className="search-input"
+                                            />
+                                            <button
+                                                className="primary-button small"
+                                                onClick={handleImport}
+                                                disabled={!importPath || isImporting}
+                                            >
+                                                {isImporting ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+                                                Importar
+                                            </button>
+                                        </div>
                                     </div>
                                 </motion.div>
                             )}
@@ -517,8 +506,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                 <div className="embeddings-info">
                                     <Database size={32} className="embeddings-icon" />
                                     <div>
-                                        <h3>bge-m3</h3>
-                                        <p>Modelo multilingual de alta qualidade (2.3 GB)</p>
+                                        <h3>MiniLM-L12 (Multilingual)</h3>
+                                        <p>Motor de busca leve e otimizado (420 MB)</p>
                                     </div>
                                 </div>
 
@@ -562,8 +551,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                 O Titier está configurado e pronto para ajudar nos seus estudos.
                                 Você pode fazer upload de PDFs e conversar sobre o conteúdo.
                             </p>
-                            <button className="primary-button large" onClick={onComplete}>
-                                <Sparkles size={20} /> Começar a Usar
+                            <button
+                                className={`primary-button large ${isAnyDownloadActive ? 'disabled' : ''}`}
+                                onClick={onComplete}
+                                disabled={isAnyDownloadActive}
+                            >
+                                {isAnyDownloadActive ? (
+                                    <>
+                                        <Loader2 className="spin" size={20} /> Preparando Modelos...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={20} /> Começar a Usar
+                                    </>
+                                )}
                             </button>
                         </motion.div>
                     )}

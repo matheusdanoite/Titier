@@ -83,7 +83,8 @@
     background: var(--glass-bg);
     border: 2px solid var(--glass-border);
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: none;
+    animation: none !important;
     position: relative;
     z-index: 2;
 }
@@ -95,7 +96,8 @@
 }
 
 .step-dot.current .dot {
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+    border-color: var(--accent);
+    /* box-shadow removed to prevent "blinking" perception */
 }
 
 .step-dot span {
@@ -134,7 +136,7 @@
     padding: 12px 16px;
     margin-bottom: 32px;
     gap: 12px;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .search-bar-container:focus-within {
@@ -338,10 +340,10 @@
     align-items: center;
     box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    animation: badgePulse 3s ease-in-out infinite;
+    /* animation: badgePulse 3s ease-in-out infinite; */
 }
 
-@keyframes badgePulse {
+/* @keyframes badgePulse {
 
     0%,
     100% {
@@ -353,7 +355,7 @@
         transform: scale(1.05);
         box-shadow: 0 2px 15px rgba(99, 102, 241, 0.5);
     }
-}
+} */
 
 .model-card .badge.installed {
     background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -468,10 +470,11 @@
     height: 100%;
     background: linear-gradient(90deg, var(--accent), #8b5cf6);
     transition: width 0.3s ease;
-    animation: progressPulse 2s ease-in-out infinite;
+    transition: width 0.3s ease;
+    /* animation: progressPulse 2s ease-in-out infinite; */
 }
 
-@keyframes progressPulse {
+/* @keyframes progressPulse {
 
     0%,
     100% {
@@ -481,7 +484,7 @@
     50% {
         opacity: 0.8;
     }
-}
+} */
 
 .progress-details {
     display: flex;
@@ -509,9 +512,17 @@
     margin-top: 16px;
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.primary-button:disabled {
+    background: #4b5563;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.7;
 }
 
 .primary-button.large {
@@ -668,4 +679,19 @@
 /* Text Colors */
 .text-green-400 {
     color: #4ade80;
+}
+
+.model-status-installed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    line-height: 1.4;
+    max-width: 300px;
 }

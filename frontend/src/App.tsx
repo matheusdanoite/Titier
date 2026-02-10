@@ -22,6 +22,8 @@ import { Settings } from './components/Settings';
 import { DebugMenu } from './components/DebugMenu';
 import { ChatSession, Message } from './components/ChatSession';
 import { SidebarMenu, Session } from './components/SidebarMenu';
+import { EmptyState } from './components/EmptyState';
+import { ProcessingView } from './components/ProcessingView';
 
 import './App.css';
 import './components/Onboarding.css';
@@ -49,6 +51,7 @@ interface SessionData extends Session {
   messages: Message[];
   searchMode: 'local' | 'global';
   contextFilter: string | null;
+  autoStartPrompt?: string | null;
 }
 
 function App() {
@@ -63,6 +66,8 @@ function App() {
   // Drag & Drop / Upload
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingFileName, setProcessingFileName] = useState('');
 
   // Layout State
   const [sidebarWidth, setSidebarWidth] = useState(400);
@@ -162,15 +167,16 @@ function App() {
 
   // --- Session Management ---
 
-  const handleNewSession = () => {
+  const handleNewSession = (pdfName?: string, autoPrompt?: string) => {
     const newSession: SessionData = {
       id: Date.now().toString(),
-      title: currentPDF ? `Chat: ${currentPDF.name}` : 'Nova Conversa',
+      title: pdfName ? `Chat: ${pdfName}` : 'Nova Conversa',
       date: new Date(),
-      preview: 'Inicie a conversa...',
+      preview: autoPrompt ? 'Gerando resumo...' : 'Inicie a conversa...',
       messages: [],
       searchMode: 'local',
-      contextFilter: currentPDF?.name || null
+      contextFilter: pdfName || null,
+      autoStartPrompt: autoPrompt || null
     };
 
     setSessions(prev => [newSession, ...prev]);
@@ -233,6 +239,8 @@ function App() {
 
   const uploadPDF = async (file: File) => {
     setUploadProgress(`Enviando ${file.name}...`);
+    setIsProcessing(true);
+    setProcessingFileName(file.name);
 
     try {
       const formData = new FormData();
@@ -255,16 +263,34 @@ function App() {
           chunks: data.chunks_added
         });
 
-        // Optionally creating a new session for the new PDF
-        // handleNewSession(); 
+        // Abrir chat e iniciar resumo automático
+        const summaryPrompt = `Analise o documento e produza um resumo estruturado e completo seguindo este formato:
 
+## 📄 Visão Geral
+Uma descrição breve (2-3 frases) do que se trata o documento, seu objetivo principal e público-alvo.
+
+## 🔑 Pontos-Chave
+Liste os tópicos, conceitos ou argumentos mais importantes do documento em bullet points. Cada ponto deve ser autoexplicativo.
+
+## 📝 Resumo Detalhado
+Desenvolva os pontos-chave em 2-4 parágrafos, mantendo fidelidade ao conteúdo original. Preserve termos técnicos e referências importantes.
+
+## 💡 Conclusões e Destaques
+Apresente as conclusões principais, recomendações do autor, ou insights mais relevantes.
+
+**Importante:** Baseie-se exclusivamente no conteúdo do documento. Não adicione informações externas. Use linguagem clara e acadêmica.`;
+        handleNewSession(file.name, summaryPrompt);
+
+        setIsProcessing(false);
         setTimeout(() => setUploadProgress(null), 3000);
       } else {
         setUploadProgress('Erro no upload');
+        setIsProcessing(false);
         setTimeout(() => setUploadProgress(null), 3000);
       }
     } catch {
       setUploadProgress('Erro de conexão');
+      setIsProcessing(false);
       setTimeout(() => setUploadProgress(null), 3000);
     }
   };
@@ -290,6 +316,39 @@ function App() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <AnimatePresence>
+        {!currentPDF && !showOnboarding && !isProcessing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 100 }}
+          >
+            <EmptyState
+              onFileSelect={() => fileInputRef.current?.click()}
+              onSettingsClick={() => setShowSettings(true)}
+              isDragging={isDragging}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isProcessing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 90 }}
+          >
+            <ProcessingView
+              fileName={processingFileName}
+              progressText={uploadProgress}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Settings isOpen={showSettings} onClose={() => setShowSettings(false)} />
       <DebugMenu
         isOpen={showDebug}
@@ -312,7 +371,7 @@ function App() {
 
       {/* Drag Overlay */}
       <AnimatePresence>
-        {isDragging && (
+        {isDragging && currentPDF && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -425,15 +484,17 @@ function App() {
       </main>
 
       {/* Resize Handle */}
-      {!isSidebarCollapsed && (
-        <div
-          ref={resizeRef}
-          className={`resize-handle ${isResizing ? 'active' : ''}`}
-          onMouseDown={() => setIsResizing(true)}
-        >
-          <GripVertical size={16} />
-        </div>
-      )}
+      {
+        !isSidebarCollapsed && (
+          <div
+            ref={resizeRef}
+            className={`resize-handle ${isResizing ? 'active' : ''}`}
+            onMouseDown={() => setIsResizing(true)}
+          >
+            <GripVertical size={16} />
+          </div>
+        )
+      }
 
       {/* Chat Sidebar */}
       <aside
@@ -506,6 +567,7 @@ function App() {
                         searchMode={sessionData.searchMode}
                         initialMessages={sessionData.messages}
                         onMessagesChange={(msgs) => handleMessagesChange(sessionId, msgs)}
+                        autoStartPrompt={sessionData.autoStartPrompt}
                       />
                       {viewMode === 'stack' && index < activeSessionIds.length - 1 && (
                         <div className="session-divider" />
@@ -518,7 +580,7 @@ function App() {
           </div>
         )}
       </aside>
-    </div>
+    </div >
   );
 }
 

@@ -27,14 +27,20 @@ Se você deseja compilar o projeto do zero, siga as instruções abaixo:
 - **📚 RAG (Retrieval-Augmented Generation):** Respostas baseadas fielmente no conteúdo dos seus PDFs.
 - **💬 Chat Multi-Sessão:** Gerencie múltiplas conversas simultâneas com contextos independentes.
 - **⚡ Streaming em Tempo Real:** Respostas exibidas token a token para feedback instantâneo.
-- **🚀 Performance Nativa:** Backend em Python otimizado (Metal/CUDA) + Frontend leve em Rust/Tauri.
+- **� Resumo Automático Estruturado:** Ao abrir um PDF, o Titier gera um resumo completo com Visão Geral, Pontos-Chave, Resumo Detalhado e Conclusões.
+- **🎨 Extração de Destaques:** Captura textos grifados, suas cores e anotações. Você pode perguntar "o que está grifado em amarelo?" e o Titier responde.
+- **🖥️ Interface Intuitiva:** Tela de estado vazio com drag-and-drop, animação de processamento durante análise, e configurações acessíveis.
+- **⚙️ Prompts Customizáveis:** Personalize os prompts de sistema diretamente pelas Configurações para adaptar o Titier ao seu estilo de estudo.
+- **�🚀 Performance Nativa & Inteligente:** Backend otimizado (Metal/CUDA) que se auto-configura baseado no seu hardware.
+- **📱 Otimizado para Apple Silicon (8GB):** Configurações específicas para garantir que o Titier rode liso até em Macs de entrada.
+- **📊 Chunking Adaptativo & Limpeza:** Ajusta o processamento para extrair a melhor qualidade semântica, removendo automaticamente cabeçalhos e rodapés repetitivos para evitar poluição no contexto da IA.
 
 ---
 
 ## 🛠️ Tecnologias
 
 - **Backend:** Python 3.11, FastAPI, LlamaIndex, Qdrant (Vetores), PyMuPDF.
-- **AI Engine:** `llama-cpp-python` para visão e linguagem, `rapidocr-onnxruntime` para OCR.
+- **AI Engine:** `llama-cpp-python` para visão e linguagem, `PaddleOCR-VL-1.5` (Vision OCR) e `rapidocr-onnxruntime`.
 - **Frontend:** Tauri v2, React, TypeScript, Vite, TailwindCSS.
 
 ---
@@ -78,10 +84,10 @@ chmod +x app/install.sh
 ```
 
 **Modelos de IA:**
-O sistema precisa de modelos GGUF para funcionar.
-1.  Crie a pasta: `mkdir -p ~/.titier/models`
-2.  Baixe modelos (ex: Llama-3.1-8B-Instruct-Q4_K_M.gguf) e coloque nesta pasta.
-3.  O `server.py` buscará modelos automaticamente neste diretório e utilizará uma **janela de contexto otimizada de 8192 tokens** para garantir estabilidade e performance em hardware local.
+O Titier é inteligente o suficiente para recomendar o melhor modelo para seu PC:
+- **Mac (8GB)**: Recomendamos o **Llama 3.2 3B** para máxima estabilidade.
+- **Hardware Superior**: O sistema sugerirá modelos maiores como **Llama 3.1 8B**.
+O `server.py` utiliza uma **janela de contexto otimizada de 8192 tokens** e **chunking adaptativo** para garantir estabilidade e performance.
 
 **Rodar o Backend:**
 ```bash

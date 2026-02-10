@@ -35,21 +35,49 @@ jobs:
         run: |
           pip install poetry
 
+      - name: Setup Ccache
+        if: matrix.os != 'windows-latest'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.target }}
+          max-size: "500M"
+
       - name: Install Python Dependencies
         shell: bash
         run: |
           cd app
+
+          # Ativar ccache se disponível
+          if [ "${{ matrix.os }}" != "windows-latest" ]; then
+            export CC="ccache gcc"
+            export CXX="ccache g++"
+          fi
+
           poetry install --no-root
+
+          # Force reinstall specific packages for hardware acceleration
           if [ "${{ matrix.os }}" == "macos-14" ]; then
             echo "Building with Metal support for macOS..."
+            # Llama.cpp with Metal
             CMAKE_ARGS="-DGGML_METAL=on" poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
+            
+            # PaddleOCR (CPU only on Mac)
+            poetry run pip install paddlepaddle==3.0.0b1
+            poetry run pip install "paddleocr>=2.9.1"
+            
           elif [ "${{ matrix.os }}" == "windows-latest" ]; then
             echo "Building with CUDA support for Windows..."
-            # Using $env: syntax for PowerShell if it were pwsh, but here we use bash
-            # In bash on Windows (MSYS/Git Bash), we can use export
             export CMAKE_ARGS="-DGGML_CUDA=on"
+            
+            # Llama.cpp with CUDA
             poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
+            
+            # PaddleOCR with CUDA support (though runner might lack GPU, libs are needed)
+            poetry run pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+            poetry run pip install "paddleocr>=2.9.1"
           fi
+
+          # Install PyInstaller
           poetry run pip install pyinstaller
 
       - name: Build Python Backend
@@ -63,10 +91,17 @@ jobs:
             --hidden-import core.inference \
             --hidden-import core.model_manager \
             --hidden-import core.pdf_processor \
+            --hidden-import core.vision_ocr \
             --hidden-import db.vector_store \
+            --hidden-import paddle \
+            --hidden-import paddleocr \
             --collect-all llama_cpp \
             --collect-all sentence_transformers \
-            --collect-all qdrant_client
+            --collect-all qdrant_client \
+            --collect-all paddle \
+            --collect-all paddleocr \
+            --collect-all pyclipper \
+            --collect-all shapely
 
       - name: Prepare Sidecar
         shell: bash

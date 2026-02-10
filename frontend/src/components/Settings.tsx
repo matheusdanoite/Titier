@@ -11,7 +11,10 @@ import {
     Check,
     Loader2,
     AlertTriangle,
-    FileText
+    FileText,
+    MessageSquare,
+    RotateCcw,
+    Save
 } from 'lucide-react';
 import './Settings.css';
 import './Onboarding.css';
@@ -54,21 +57,13 @@ interface SystemStats {
     version?: string;
 }
 
-interface DownloadStatus {
-    status: string;
-    progress: number;
-    downloaded_mb: number;
-    total_mb: number;
-    speed_mbps: number;
-    error?: string;
-}
+
 
 export function Settings({ isOpen, onClose }: SettingsProps) {
-    const [activeTab, setActiveTab] = useState<'models' | 'database'>('models');
+    const [activeTab, setActiveTab] = useState<'models' | 'database' | 'prompts'>('models');
     const [stats, setStats] = useState<SystemStats | null>(null);
     const [models, setModels] = useState<Model[]>([]);
-    const [downloading, setDownloading] = useState<string | null>(null);
-    const [downloadStatus, setDownloadStatus] = useState<DownloadStatus | null>(null);
+
     const [isClearing, setIsClearing] = useState(false);
     const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
     const [hoveredModel, setHoveredModel] = useState<string | null>(null);
@@ -78,12 +73,75 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
         action: () => Promise<void>;
     } | null>(null);
 
+    // Prompt states
+    const [promptBase, setPromptBase] = useState('');
+    const [promptRag, setPromptRag] = useState('');
+    const [promptVision, setPromptVision] = useState('');
+    const [isSavingPrompts, setIsSavingPrompts] = useState(false);
+    const [promptFeedback, setPromptFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
     useEffect(() => {
         if (isOpen) {
             fetchStats();
             fetchModels();
+            fetchPrompts();
         }
     }, [isOpen]);
+
+    const fetchPrompts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/prompts`);
+            const data = await res.json();
+            setPromptBase(data.active.system_base || '');
+            setPromptRag(data.active.system_rag || '');
+            setPromptVision(data.active.system_vision || '');
+        } catch (err) {
+            console.error('Erro ao buscar prompts:', err);
+        }
+    };
+
+    const handleSavePrompts = async () => {
+        setIsSavingPrompts(true);
+        setPromptFeedback(null);
+        try {
+            const res = await fetch(`${API_URL}/prompts`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    system_base: promptBase,
+                    system_rag: promptRag,
+                    system_vision: promptVision
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao salvar');
+            }
+            setPromptFeedback({ type: 'success', msg: 'Prompts salvos com sucesso!' });
+            setTimeout(() => setPromptFeedback(null), 3000);
+        } catch (err: any) {
+            setPromptFeedback({ type: 'error', msg: err.message || 'Erro ao salvar prompts' });
+        } finally {
+            setIsSavingPrompts(false);
+        }
+    };
+
+    const handleResetPrompts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/prompts`, { method: 'DELETE' });
+            if (res.ok) {
+                const data = await res.json();
+                setPromptBase(data.active.system_base || '');
+                setPromptRag(data.active.system_rag || '');
+                setPromptVision(data.active.system_vision || '');
+                setPromptFeedback({ type: 'success', msg: 'Prompts restaurados para os padrões!' });
+                setTimeout(() => setPromptFeedback(null), 3000);
+            }
+        } catch (err) {
+            console.error('Erro ao restaurar prompts:', err);
+            setPromptFeedback({ type: 'error', msg: 'Erro ao restaurar prompts' });
+        }
+    };
 
     const fetchStats = async () => {
         try {
@@ -122,56 +180,32 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
         }
     };
 
-    const downloadModel = async (modelId: string) => {
-        setDownloading(modelId);
-        setDownloadStatus({ status: 'starting', progress: 0, downloaded_mb: 0, total_mb: 0, speed_mbps: 0 });
+    const [importPath, setImportPath] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
 
+    const handleImport = async () => {
+        if (!importPath.trim()) return;
+        setIsImporting(true);
         try {
-            const res = await fetch(`${API_URL}/models/download/${modelId}`, {
-                method: 'POST'
+            const cleanPath = importPath.replace(/^"|"$/g, '').trim();
+            const res = await fetch(`${API_URL}/models/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: cleanPath })
             });
-            const data = await res.json();
 
-            if (data.status === 'already_installed') {
-                setDownloading(null);
-                setDownloadStatus(null);
-                fetchModels();
-                return;
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao importar');
             }
 
-            const pollProgress = async () => {
-                try {
-                    const statusRes = await fetch(`${API_URL}/models/download/${modelId}/status`);
-                    const status = await statusRes.json();
-
-                    if (status.status === 'downloading' || status.status === 'pending') {
-                        setDownloadStatus(status);
-                        setTimeout(pollProgress, 1000);
-                    } else if (status.status === 'completed') {
-                        setDownloadStatus({ ...status, progress: 100 });
-                        // Pequeno delay para mostrar 100% e garantir que o arquivo final está estável
-                        setTimeout(() => {
-                            setDownloading(null);
-                            setDownloadStatus(null);
-                            fetchModels();
-                        }, 800);
-                    } else if (status.status === 'failed') {
-                        setDownloading(null);
-                        setDownloadStatus(null);
-                        alert('Erro no download: ' + (status.error || 'Erro desconhecido'));
-                    }
-                } catch (e) {
-                    console.error('Erro no polling:', e);
-                    setDownloading(null);
-                    setDownloadStatus(null);
-                }
-            };
-            setTimeout(pollProgress, 2000);
-        } catch (err) {
-            setDownloading(null);
-            setDownloadStatus(null);
-            console.error(err);
-            alert('Erro ao iniciar download');
+            alert('Modelo importado com sucesso!');
+            setImportPath('');
+            fetchModels();
+        } catch (err: any) {
+            alert(err.message || 'Erro ao importar modelo');
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -334,6 +368,12 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         >
                             <Database size={18} /> Banco de Dados
                         </button>
+                        <button
+                            className={`settings-tab ${activeTab === 'prompts' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('prompts')}
+                        >
+                            <MessageSquare size={18} /> Prompts
+                        </button>
                     </div>
 
                     <div className="settings-panel">
@@ -376,42 +416,33 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                                         </div>
                                     </div>
 
-                                    {/* Seção de Download de Novos Modelos */}
+                                    {/* Seção de Importação Manual */}
                                     <div className="models-subsection" style={{ marginTop: '40px' }}>
-                                        <h3 style={{ borderBottomColor: 'var(--glass-border)' }}>Baixar outros modelos</h3>
-                                        <div className="models-grid">
-                                            {models.filter(m => !m.installed).map(model => (
-                                                <div key={model.id} className="model-card">
-                                                    <h4>{model.name}</h4>
-                                                    <p>{model.description}</p>
-                                                    <div className="model-specs">
-                                                        <span>{model.size_gb} GB</span>
-                                                        <span>{model.vram_required} GB VRAM</span>
-                                                    </div>
+                                        <h3 style={{ borderBottomColor: 'var(--glass-border)' }}>Importar Modelo Local</h3>
+                                        <div className="import-section glass-panel">
+                                            <p style={{ marginBottom: '10px', fontSize: '0.9em', color: 'var(--text-secondary)' }}>
+                                                Adicione modelos <strong>.gguf</strong> manualmente apontando o caminho do arquivo no seu computador.
+                                            </p>
 
-                                                    {downloading === model.id ? (
-                                                        <div className="model-download-status">
-                                                            <div
-                                                                className="model-download-bar"
-                                                                style={{ width: `${downloadStatus?.progress || 0}%` }}
-                                                            />
-                                                            <div className="model-download-text">
-                                                                <Loader2 className="spin" size={14} />
-                                                                <span>{downloadStatus?.progress?.toFixed(0)}%</span>
-                                                                {downloadStatus?.speed_mbps ? (
-                                                                    <span style={{ opacity: 0.7, fontSize: '0.8em' }}>
-                                                                        ({downloadStatus.speed_mbps.toFixed(1)} MB/s)
-                                                                    </span>
-                                                                ) : null}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <button className="model-button" onClick={() => downloadModel(model.id)}>
-                                                            <Download size={16} /> Baixar
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="C:\Caminho\Para\modelo.gguf"
+                                                    value={importPath}
+                                                    onChange={(e) => setImportPath(e.target.value)}
+                                                    className="search-input"
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <button
+                                                    className="model-button"
+                                                    onClick={handleImport}
+                                                    disabled={!importPath || isImporting}
+                                                    style={{ minWidth: '120px' }}
+                                                >
+                                                    {isImporting ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+                                                    Importar
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -463,6 +494,74 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                                             {isClearing ? 'Limpando...' : 'Limpar Tudo'}
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'prompts' && (
+                            <div className="panel-section">
+                                <h3>System Prompts</h3>
+                                <p className="prompt-description">
+                                    Personalize os prompts que definem o comportamento da IA. Alterações são aplicadas imediatamente nas próximas conversas.
+                                </p>
+
+                                <div className="prompt-group">
+                                    <label className="prompt-label">Prompt Base (sem documentos)</label>
+                                    <p className="prompt-hint">Usado quando o usuário faz uma pergunta sem documentos indexados.</p>
+                                    <textarea
+                                        className="prompt-textarea"
+                                        value={promptBase}
+                                        onChange={(e) => setPromptBase(e.target.value)}
+                                        rows={8}
+                                    />
+                                </div>
+
+                                <div className="prompt-group">
+                                    <label className="prompt-label">Prompt RAG (com documentos)</label>
+                                    <p className="prompt-hint">
+                                        Usado quando há contexto dos PDFs. O placeholder <code>{'{context}'}</code> é <strong>obrigatório</strong> — será substituído pelo conteúdo dos documentos.
+                                    </p>
+                                    <textarea
+                                        className="prompt-textarea"
+                                        value={promptRag}
+                                        onChange={(e) => setPromptRag(e.target.value)}
+                                        rows={10}
+                                    />
+                                </div>
+
+                                <div className="prompt-group">
+                                    <label className="prompt-label">Prompt de Visão (OCR)</label>
+                                    <p className="prompt-hint">Usado na análise de imagens e extração de texto por OCR.</p>
+                                    <textarea
+                                        className="prompt-textarea"
+                                        value={promptVision}
+                                        onChange={(e) => setPromptVision(e.target.value)}
+                                        rows={3}
+                                    />
+                                </div>
+
+                                {promptFeedback && (
+                                    <div className={`prompt-feedback ${promptFeedback.type}`}>
+                                        {promptFeedback.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+                                        {promptFeedback.msg}
+                                    </div>
+                                )}
+
+                                <div className="prompt-actions">
+                                    <button
+                                        className="prompt-btn save"
+                                        onClick={handleSavePrompts}
+                                        disabled={isSavingPrompts}
+                                    >
+                                        {isSavingPrompts ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                                        Salvar Prompts
+                                    </button>
+                                    <button
+                                        className="prompt-btn reset"
+                                        onClick={handleResetPrompts}
+                                    >
+                                        <RotateCcw size={16} /> Restaurar Padrão
+                                    </button>
                                 </div>
                             </div>
                         )}

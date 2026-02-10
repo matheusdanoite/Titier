@@ -16,6 +16,7 @@ import asyncio
 # Local imports
 # Local imports
 from core.inference import LLMEngine, MultimodalEngine, get_backend_info
+from core.prompts import get_prompts, save_prompts, reset_prompts, get_defaults
 from core.model_manager import get_model_manager, RECOMMENDED_MODELS, DownloadStatus
 from db.vector_store import VectorStore
 from core.pdf_processor import PDFProcessor, HybridPDFProcessor
@@ -87,7 +88,7 @@ def get_chat_model() -> Optional[LLMEngine]:
 
 
 def get_vision_model() -> Optional[MultimodalEngine]:
-    """Carrega o modelo de visão (MiniCPM) sob demanda."""
+    """Carrega o modelo de visão sob demanda (configurável)."""
     global _vision_model, _chat_model
     
     if _vision_model is None:
@@ -135,16 +136,25 @@ def get_vector_store() -> VectorStore:
 
 def get_pdf_processor(use_vision: bool = False) -> PDFProcessor:
     """Retorna processor adequado."""
-    global _pdf_processor
+    from core.hardware import detect_hardware_profile
+    hw = detect_hardware_profile()
+    chunk_args = {
+        "chunk_size": hw.recommended_chunk_size,
+        "chunk_overlap": hw.recommended_chunk_overlap
+    }
     
     if use_vision:
         vision_model = get_vision_model()
-        if vision_model:
-            print("[Server] Instanciando HybridPDFProcessor com Vision AI")
-            return HybridPDFProcessor(vision_engine=vision_model)
+        
+        # Obter VisionOCR Engine dedicado (PaddleOCR-VL-1.5)
+        from core.vision_ocr import get_vision_ocr_engine, is_vision_ocr_available
+        vision_ocr = get_vision_ocr_engine() if is_vision_ocr_available() else None
+        
+        print(f"[Server] Instanciando HybridPDFProcessor (Vision AI: {'Sim' if vision_model else 'Não'}, Vision OCR: {'Sim' if vision_ocr else 'Não'}, Chunk: {chunk_args['chunk_size']})")
+        return HybridPDFProcessor(vision_engine=vision_model, vision_ocr=vision_ocr, **chunk_args)
     
     # Processador padrão (leve, sem estado de modelo)
-    return PDFProcessor()
+    return PDFProcessor(**chunk_args)
 
 
 # === Models ===
@@ -154,6 +164,9 @@ class ChatRequest(BaseModel):
     max_tokens: int = 4096
     source_filter: Optional[str] = None  # Filtrar por nome do arquivo
     search_mode: str = "local"  # "local" (documento atual) ou "global" (todos)
+    rag_chunks: Optional[int] = None  # Override manual do n_chunks
+    highlight_only: Optional[bool] = None
+    color_filter: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -197,12 +210,14 @@ async def health_check():
     }
 
 
+
+
 @app.get("/")
 async def root():
     """Info da API."""
     return {
         "app": "Titier PDF AI",
-        "version": "0.2.0",
+        "version": "0.5.0",
         "docs": "/docs"
     }
 
@@ -214,11 +229,23 @@ async def get_recommended_ocr_models():
     return manager.discover_ocr_models()
 
 
-@app.get("/models/ocr/search")
-async def search_ocr_models(q: str):
-    """Busca modelos OCR no Hugging Face."""
-    manager = get_model_manager()
-    return manager.search_ocr_models(q)
+
+
+
+@app.get("/ocr/status")
+async def get_ocr_status():
+    """Retorna status do engine OCR (PaddleOCR/RapidOCR)."""
+    from core.ocr_engine import get_ocr_engine
+    ocr = get_ocr_engine()
+    return ocr.get_info()
+
+
+@app.get("/ocr/vision/status")
+async def get_vision_ocr_status():
+    """Retorna status do VisionOCR (PaddleOCR-VL-1.5)."""
+    from core.vision_ocr import get_vision_ocr_engine
+    engine = get_vision_ocr_engine()
+    return engine.get_info()
 
 
 @app.get("/status")
@@ -247,6 +274,74 @@ async def get_status():
     }
 
 
+@app.get("/api/hardware")
+async def get_hardware_info():
+    """Retorna informações detalhadas do hardware e configurações otimizadas."""
+    from core.hardware import detect_hardware_profile, get_recommended_models
+    
+    profile = detect_hardware_profile()
+    
+    return {
+        "tier": profile.tier.value,
+        "ram": {
+            "total_gb": profile.ram_total_gb,
+            "available_gb": profile.ram_available_gb
+        },
+        "vram": {
+            "total_gb": profile.vram_total_gb,
+            "available_gb": profile.vram_available_gb
+        },
+        "cpu_cores": {
+            "physical": profile.cpu_cores_physical,
+            "logical": profile.cpu_cores_logical
+        },
+        "backend": profile.backend,
+        "gpu_name": profile.gpu_name,
+        "config": {
+            "n_ctx": profile.n_ctx,
+            "n_batch": profile.n_batch,
+            "n_gpu_layers": profile.n_gpu_layers,
+            "n_threads": profile.n_threads,
+            "n_threads_batch": profile.n_threads_batch,
+            "flash_attn": profile.flash_attn,
+            "kv_cache_type": profile.type_k or "F16",
+            "use_mmap": profile.use_mmap,
+            "use_mlock": profile.use_mlock,
+            "offload_kqv": profile.offload_kqv
+        },
+        "max_tokens_default": profile.max_tokens_default,
+        "recommended_models": get_recommended_models(profile.tier)
+    }
+
+
+def _get_dynamic_rag_limit(request: ChatRequest, model: Optional[LLMEngine]) -> int:
+    """Calcula o limite de chunks baseado no modelo e no override do usuário."""
+    if request.rag_chunks is not None:
+        return request.rag_chunks
+        
+    # Default conservador
+    limit = 3
+    
+    # Se estiver pedindo destaque, aumentamos o limite para pegar mais contexto colorido
+    is_asking_highlights = any(kw in request.message.lower() for kw in ["grifado", "destaque", "marcado", "grifo"])
+    if is_asking_highlights:
+        limit = 15
+    
+    # Se modelo carregado, ajustar por n_ctx
+    if model and hasattr(model, "n_ctx"):
+        n_ctx = model.n_ctx
+        if n_ctx <= 2048:
+            limit = max(limit, 2)
+        elif n_ctx <= 4096:
+            limit = max(limit, 5)
+        elif n_ctx <= 8192:
+            limit = max(limit, 10)
+        elif n_ctx > 8192:
+            limit = max(limit, 20) # Permitir muito mais para modelos modernos (Llama 3.1/3.2, etc)
+            
+    return limit
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -268,34 +363,42 @@ async def chat(request: ChatRequest):
                 if request.search_mode == "local" and request.source_filter:
                     filter_source = request.source_filter
                 
+                # Limite dinâmico
+                limit = _get_dynamic_rag_limit(request, get_chat_model())
+                
+                # Detectar intenção de destaques/cores
+                msg_lower = request.message.lower()
+                h_only = request.highlight_only or False
+                c_filter = request.color_filter
+                if h_only is False:
+                    if any(kw in msg_lower for kw in ["grifado", "destaque", "marcado", "grifo"]):
+                        h_only = True
+                if c_filter is None:
+                    cores = ["amarelo", "verde", "azul", "vermelho", "rosa", "laranja", "cinza"]
+                    for cor in cores:
+                        if cor in msg_lower:
+                            c_filter = cor
+                            h_only = True
+                            break
+
                 results = vs.search(
                     request.message, 
-                    limit=3,
-                    source_filter=filter_source
+                    limit=limit,
+                    source_filter=filter_source,
+                    highlight_only=h_only,
+                    color_filter=c_filter
                 )
                 sources = results
                 context = "\n\n".join([r["text"] for r in results])
         except Exception as e:
             print(f"[Chat] Erro no RAG: {e}")
     
-    # Construir prompt
+    # Construir prompt usando prompts centralizados
+    prompts = get_prompts()
     if context:
-        prompt = f"""Baseado no seguinte contexto dos documentos:
-
-{context}
-
-Responda a pergunta do usuário de forma clara e precisa:
-
-Pergunta: {request.message}
-
-Resposta:"""
+        system_content = prompts["system_rag"].format(context=context)
     else:
-        prompt = f"""Você é Titier, um assistente de estudos inteligente.
-Responda de forma clara e útil:
-
-Pergunta: {request.message}
-
-Resposta:"""
+        system_content = prompts["system_base"]
     
     # Gerar resposta
     if not _chat_model:
@@ -305,8 +408,8 @@ Resposta:"""
     if _chat_model:
         response_text = _chat_model.chat(
             messages=[
-                {"role": "system", "content": prompt.split("Pergunta:")[0].strip()},
-                {"role": "user", "content": f"Pergunta: {request.message}"}
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": request.message}
             ],
             max_tokens=request.max_tokens
         )
@@ -340,7 +443,33 @@ async def chat_stream(request: ChatRequest):
                     filter_source = request.source_filter
                     print(f"[Chat] Filtrando por fonte: {filter_source}")
                 
-                results = vs.search(request.message, limit=3, source_filter=filter_source)
+                # Definir limite dinâmico de chunks
+                llm = get_chat_model()
+                rag_limit = _get_dynamic_rag_limit(request, llm)
+                
+                # Detectar intenção de destaques/cores
+                msg_lower = request.message.lower()
+                h_only = request.highlight_only or False
+                c_filter = request.color_filter
+                if h_only is False:
+                    if any(kw in msg_lower for kw in ["grifado", "destaque", "marcado", "grifo"]):
+                        h_only = True
+                if c_filter is None:
+                    cores = ["amarelo", "verde", "azul", "vermelho", "rosa", "laranja", "cinza"]
+                    for cor in cores:
+                        if cor in msg_lower:
+                            c_filter = cor
+                            h_only = True
+                            break
+
+                print(f"[Chat] Limite de RAG dinâmico: {rag_limit} (n_ctx: {llm.n_ctx if llm else 'N/A'}, H_Only: {h_only}, Color: {c_filter})")
+                results = vs.search(
+                    request.message, 
+                    limit=rag_limit, 
+                    source_filter=filter_source,
+                    highlight_only=h_only,
+                    color_filter=c_filter
+                )
                 print(f"[Chat] Resultados encontrados: {len(results)}")
                 
                 sources = results
@@ -349,14 +478,12 @@ async def chat_stream(request: ChatRequest):
         except Exception as e:
             print(f"[Chat] Erro no RAG: {e}")
 
-    # 2. Construir prompt
-    system_prompt = "Você é Titier, um assistente de estudos inteligente."
+    # 2. Construir prompt usando prompts centralizados
+    prompts = get_prompts()
     if context:
-        system_prompt = f"""Baseado no seguinte contexto dos documentos:
-
-{context}
-
-Responda a pergunta do usuário de forma clara e precisa."""
+        system_prompt = prompts["system_rag"].format(context=context)
+    else:
+        system_prompt = prompts["system_base"]
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -388,31 +515,6 @@ Responda a pergunta do usuário de forma clara e precisa."""
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-    llm = get_chat_model()
-    if llm:
-        try:
-            response_text = llm.generate(
-                prompt=prompt,
-                max_tokens=request.max_tokens,
-                temperature=0.7
-            )
-            model_used = Path(llm.model_path).name if llm.model_path else None
-        except Exception as e:
-            response_text = f"Erro ao gerar resposta: {str(e)}"
-            model_used = None
-    else:
-        # Fallback sem modelo
-        if context:
-            response_text = f"[Sem modelo LLM] Encontrei informações relevantes nos documentos:\n\n{context[:500]}..."
-        else:
-            response_text = f"[Sem modelo LLM] Echo: {request.message}\n\nPara respostas com IA, baixe um modelo de Chat (Llama 3.2, etc)."
-        model_used = None
-    
-    return ChatResponse(
-        response=response_text.strip(),
-        sources=[{"text": s["text"][:200], "page": s.get("page")} for s in sources],
-        model_used=model_used
-    )
 
 
 @app.post("/upload", response_model=UploadResponse)
@@ -448,7 +550,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
     
     # Passo 2: Analisar conteúdo (Scan)
-    temp_processor = PDFProcessor()
+    temp_processor = get_pdf_processor(use_vision=False)
     has_images = temp_processor.has_images(str(file_path))
     
     # Passo 3: Processamento Condicional
@@ -456,13 +558,20 @@ async def upload_pdf(file: UploadFile = File(...)):
     try:
         if has_images:
             print(f"[Upload] Imagens detectadas em {file.filename}. Iniciando pipeline de Visão...")
-            # Carregar Vision Model (unload chat se necessário)
-            vision_processor = get_pdf_processor(use_vision=True)
-            chunks = vision_processor.process(str(file_path))
-            
-            # Offload Vision Model para economizar recursos
-            print("[Upload] Processamento visual concluído. Liberando modelo de visão...")
-            unload_models()
+            try:
+                # Carregar Vision Model (unload chat se necessário)
+                vision_processor = get_pdf_processor(use_vision=True)
+                chunks = vision_processor.process(str(file_path))
+                
+                # Offload Vision Model para economizar recursos
+                print("[Upload] Processamento visual concluído. Liberando modelo de visão...")
+                unload_models()
+            except Exception as vision_error:
+                print(f"[Upload] Modelo de visão falhou ({vision_error}). Usando OCR fallback...")
+                # Fallback: usar HybridPDFProcessor com VisionOCR ou RapidOCR
+                ocr_processor = get_pdf_processor(use_vision=True) # Vai tentar vision_ocr internally
+                chunks = ocr_processor.process(str(file_path))
+                print("[Upload] Fallback OCR: Texto extraído via OCR Engine.")
         else:
             print(f"[Upload] Apenas texto detectado em {file.filename}. Usando pipeline padrão...")
             chunks = temp_processor.process(str(file_path))
@@ -591,17 +700,26 @@ async def list_models():
 async def get_recommended_models():
     """Lista modelos recomendados (agora via descoberta dinâmica)."""
     manager = get_model_manager()
-    # Executar descoberta em thread pool para não bloquear
-    return await asyncio.to_thread(manager.get_recommended_models)
+    # Retornar lista estática
+    return manager.get_recommended_models()
 
 
-@app.get("/models/search")
-async def search_models(q: str):
-    """Busca modelos no Hugging Face."""
-    if not q:
-        return []
+class ImportModelRequest(BaseModel):
+    path: str
+
+@app.post("/models/import")
+async def import_model(request: ImportModelRequest):
+    """Importa um modelo local .gguf"""
     manager = get_model_manager()
-    return await asyncio.to_thread(manager.search_models, q)
+    try:
+        # Executar em thread/background pois pode envolver cópia de arquivo grande
+        return await asyncio.to_thread(manager.import_model, request.path)
+    except FileNotFoundError:
+        raise HTTPException(404, "Arquivo não encontrado")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Erro ao importar: {e}")
 
 
 @app.post("/models/download/{model_id}")
@@ -613,6 +731,14 @@ async def download_model(model_id: str, background_tasks: BackgroundTasks):
     if not model:
         raise HTTPException(404, f"Modelo '{model_id}' não encontrado")
     
+    # Modelos PaddleOCR usam PaddleHub, não GGUF
+    if model.get("uses_paddleocr"):
+        return {
+            "status": "paddleocr_model",
+            "message": f"PaddleOCR-VL é instalado automaticamente via pip, não requer download manual. Use: pip install paddleocr[doc-parser]",
+            "installed": True
+        }
+    
     # Verificar se já existe
     model_path = manager.model_dir / model["filename"]
     if model_path.exists():
@@ -622,17 +748,16 @@ async def download_model(model_id: str, background_tasks: BackgroundTasks):
             "path": str(model_path)
         }
     
-    # Iniciar download em background (sync wrapper)
-    def do_download():
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    # Iniciar download em background
+    async def do_download_async():
+        print(f"[Server] Iniciando tarefa de download para: {model_id}")
         try:
-            loop.run_until_complete(manager.download_model(model_id))
-        finally:
-            loop.close()
+            await manager.download_model(model_id)
+            print(f"[Server] Tarefa de download concluída: {model_id}")
+        except Exception as e:
+            print(f"[Server] Erro na tarefa de download {model_id}: {e}")
     
-    background_tasks.add_task(do_download)
+    background_tasks.add_task(do_download_async)
     
     return {
         "status": "started",
@@ -640,6 +765,26 @@ async def download_model(model_id: str, background_tasks: BackgroundTasks):
         "model_id": model_id,
         "size_gb": model["size_gb"]
     }
+
+
+@app.get("/models/download/status")
+async def get_all_download_status():
+    """Retorna status de todos os downloads ativos."""
+    manager = get_model_manager()
+    downloads = manager.get_all_downloads()
+    
+    return [
+        {
+            "model_id": d.model_id,
+            "status": d.status.value,
+            "progress": d.progress,
+            "downloaded_mb": round(d.downloaded_bytes / (1024**2), 1),
+            "total_mb": round(d.total_bytes / (1024**2), 1),
+            "speed_mbps": d.speed_mbps,
+            "error": d.error
+        }
+        for d in downloads
+    ]
 
 
 @app.get("/models/download/{model_id}/status")
@@ -652,6 +797,13 @@ async def get_download_status(model_id: str):
         # Verificar se modelo existe
         model = manager.get_model_by_id(model_id)
         if model:
+            # Modelos PaddleOCR já estão instalados via pip
+            if model.get("uses_paddleocr"):
+                return {
+                    "status": "completed",
+                    "progress": 100,
+                    "message": "PaddleOCR-VL instalado via pip"
+                }
             model_path = manager.model_dir / model["filename"]
             if model_path.exists():
                 return {
@@ -696,6 +848,32 @@ async def get_onboarding_status():
     backend_info = get_backend_info()
     manager = get_model_manager()
     
+    # Identificar recomendação ideal baseada no hardware atual
+    tier = backend_info.get("tier", "medium")
+    is_mac = backend_info.get("platform") == "Darwin"
+    
+    # Lógica de recomendação:
+    # 8GB Mac -> 3B Model
+    # 16GB+ Mac ou GPU 8GB -> 8B Model
+    # Outros -> 3B Model (segurança)
+    
+    recommended_model_id = "llama-3.2-3b-q4" # Default seguro
+    if is_mac:
+        if backend_info.get("ram_total", 0) >= 16:
+            recommended_model_id = "llama-3.1-8b-q5"
+        else:
+            recommended_model_id = "llama-3.2-3b-q4"
+    elif backend_info.get("gpu_available") and backend_info.get("vram_total", 0) >= 7:
+        recommended_model_id = "llama-3.1-8b-q5"
+        
+    recommended_llm = manager.get_model_by_id(recommended_model_id)
+    
+    # Atualizar flags de recomendação na lista estática para o frontend
+    all_recommendations = manager.get_recommended_models()
+    for m in all_recommendations:
+        m["recommended"] = (m["id"] == recommended_model_id)
+        
+    # Verificar modelos instalados
     installed_models = manager.get_installed_models()
     has_llm = len(installed_models) > 0
     has_ocr = any(
@@ -737,8 +915,11 @@ async def get_onboarding_status():
     
     return {
         "steps": steps,
-        "ready_to_chat": has_llm and embeddings_ready,
-        "gpu": backend_info["gpu_available"]
+        "gpu": backend_info.get("gpu_name") or backend_info.get("backend"),
+        "tier": backend_info.get("tier"),
+        "ready_to_chat": has_llm and has_ocr and embeddings_ready,
+        "recommended_llm": recommended_llm,
+        "all_recommendations": all_recommendations
     }
 
 
@@ -774,7 +955,7 @@ async def init_embeddings(background_tasks: BackgroundTasks):
     
     background_tasks.add_task(do_init)
     
-    return {"status": "started", "message": "Inicializando modelo de embeddings (2.3 GB)"}
+    return {"status": "started", "message": "Inicializando modelo de embeddings leve (420 MB)"}
 
 
 @app.get("/onboarding/init-embeddings/status")
@@ -787,6 +968,49 @@ async def get_embeddings_init_status():
         return {"status": "completed", "progress": 100, "error": None}
     
     return _init_status["embeddings"]
+
+
+# === Prompt Management Routes ===
+class PromptsUpdateRequest(BaseModel):
+    system_base: Optional[str] = None
+    system_rag: Optional[str] = None
+    system_vision: Optional[str] = None
+
+
+@app.get("/prompts")
+async def get_system_prompts():
+    """Retorna os prompts ativos e os padrões."""
+    return {
+        "active": get_prompts(),
+        "defaults": get_defaults()
+    }
+
+
+@app.put("/prompts")
+async def update_system_prompts(request: PromptsUpdateRequest):
+    """Salva prompts customizados."""
+    data = {}
+    if request.system_base:
+        data["system_base"] = request.system_base
+    if request.system_rag:
+        if "{context}" not in request.system_rag:
+            raise HTTPException(400, "O prompt RAG deve conter o placeholder {context}")
+        data["system_rag"] = request.system_rag
+    if request.system_vision:
+        data["system_vision"] = request.system_vision
+
+    if not data:
+        raise HTTPException(400, "Nenhum prompt fornecido")
+
+    save_prompts(data)
+    return {"message": "Prompts salvos com sucesso", "active": get_prompts()}
+
+
+@app.delete("/prompts")
+async def reset_system_prompts():
+    """Restaura prompts para os valores padrão."""
+    reset_prompts()
+    return {"message": "Prompts restaurados para os padrões", "active": get_prompts()}
 
 
 def main():

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, FileText, ChevronDown, Sparkles, Copy, RefreshCw, X } from 'lucide-react';
+import { Send, FileText, ChevronDown, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Markdown from 'react-markdown';
 import './ChatSession.css';
@@ -23,22 +23,24 @@ export interface ChatSessionProps {
     searchMode?: 'local' | 'global';
     initialMessages?: Message[];
     onMessagesChange?: (messages: Message[]) => void;
+    autoStartPrompt?: string | null;
 }
 
 export const ChatSession: React.FC<ChatSessionProps> = ({
-    sessionId,
     title,
     isActive,
     onClose,
     contextFilter,
     searchMode = 'local',
     initialMessages = [],
-    onMessagesChange
+    onMessagesChange,
+    autoStartPrompt
 }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [showSources, setShowSources] = useState<string | null>(null);
+    const autoStartedRef = useRef(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Scroll to bottom on new messages
@@ -59,17 +61,17 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
         });
     };
 
-    const sendMessage = async () => {
-        if (!input.trim() || loading) return;
+    const sendMessage = async (overridePrompt?: string) => {
+        const textToSend = overridePrompt || input.trim();
+        if (!textToSend || loading) return;
 
         const userMsg: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: input.trim()
+            content: textToSend
         };
 
-        handleMessagesUpdate(prev => [...prev, userMsg]);
-        setInput('');
+        if (!overridePrompt) setInput('');
         setLoading(true);
 
         const assistantMsgId = (Date.now() + 1).toString();
@@ -147,6 +149,14 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
             ));
         }
     };
+
+    // Auto-start summary if needed
+    useEffect(() => {
+        if (isActive && !loading && messages.length === 0 && autoStartPrompt && !autoStartedRef.current) {
+            autoStartedRef.current = true;
+            sendMessage(autoStartPrompt);
+        }
+    }, [isActive, messages.length, autoStartPrompt, loading]);
 
     if (!isActive) return null;
 
@@ -241,7 +251,7 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                         disabled={loading}
                     />
                     <button
-                        onClick={sendMessage}
+                        onClick={() => sendMessage()}
                         disabled={!input.trim() || loading}
                         className="send-btn"
                     >
