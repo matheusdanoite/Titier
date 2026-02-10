@@ -39,9 +39,9 @@ Se você deseja compilar o projeto do zero, siga as instruções abaixo:
 
 ## 🛠️ Tecnologias
 
-- **Backend:** Python 3.11, FastAPI, LlamaIndex, Qdrant (Vetores), PyMuPDF.
+- **Backend:** Python 3.11, FastAPI, Qdrant (Vetores), PyMuPDF.
 - **AI Engine:** `llama-cpp-python` para visão e linguagem, `PaddleOCR-VL-1.5` (Vision OCR) e `rapidocr-onnxruntime`.
-- **Frontend:** Tauri v2, React, TypeScript, Vite, TailwindCSS.
+- **Frontend:** Tauri v2, React, TypeScript, Vite.
 
 ---
 
@@ -124,9 +124,11 @@ O Tauri precisa de um executável do Python para empacotar junto. Usamos o PyIns
 
 ```bash
 # Na raiz do projeto
-poetry run pyinstaller app/server.py \
+cd app
+poetry run pyinstaller server.py \
   --name titier-backend \
   --onefile \
+  --paths . \
   --collect-all llama_cpp \
   --collect-all sentence_transformers \
   --collect-all qdrant_client
@@ -150,15 +152,16 @@ O instalador estará em `frontend/src-tauri/target/release/bundle`.
 ```
 Titier/
 ├── app/                 # Backend Python (FastAPI + IA)
-│   ├── core/            # Lógica de IA (Inferência, Agente)
+│   ├── core/            # Lógica de IA (Inferência, Hardware, OCR, PDF)
 │   ├── db/              # Banco de Vetores (Qdrant)
 │   ├── server.py        # Entry point da API
-│   └── install.sh       # Script de setup de ambiente
+│   ├── install.sh       # Script de setup de ambiente
+│   └── pyproject.toml   # Configuração e dependências Python (Poetry)
 ├── frontend/            # Frontend (Tauri + React)
 │   ├── src/             # Código React
 │   └── src-tauri/       # Configuração Rust/Tauri
-├── poetry.lock          # Dependências Python travadas
-└── pyproject.toml       # Configuração do projeto Python
+├── scripts/             # Scripts de teste e verificação
+└── CHANGELOG.md         # Registro de alterações
 ```
 
 ## 🤝 Contribuição

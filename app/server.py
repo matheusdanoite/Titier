@@ -24,7 +24,7 @@ from core.pdf_processor import PDFProcessor, HybridPDFProcessor
 # === App Setup ===
 app = FastAPI(
     title="Titier Backend",
-    version="0.2.0",
+    version="0.5.0",
     description="Backend do assistente de estudos com IA local e RAG"
 )
 

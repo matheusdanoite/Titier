@@ -5,6 +5,36 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-02-09
+
+### Removido
+
+#### Código Morto (Backend)
+- **`app/main.py`:** Protótipo inicial que importava classes inexistentes (`InferenceEngine`). Substituído por `server.py`.
+- **`app/core/agent.py`:** `StudyAgent` com LlamaIndex Agent — nunca utilizado pelo servidor principal.
+- **`app/download_mmproj.py`:** Script standalone de download substituído pelo `ModelManager`.
+- **`app/utils/downloader.py`:** Módulo de download legado, usado apenas pelo `main.py` (morto). Diretório `app/utils/` removido.
+- **`app/test_header_footer.pdf`:** PDF de teste esquecido na raiz do backend.
+
+#### Dependências Não Utilizadas (Backend)
+- **`llama-index`**, **`llama-index-llms-llama-cpp`**, **`llama-index-embeddings-huggingface`**, **`llama-index-vector-stores-qdrant`**, **`llama-index-tools-google`:** 5 pacotes removidos do `pyproject.toml` — eram utilizados apenas no código morto (`agent.py` e `main.py`).
+- **`requirements.txt`:** Arquivo duplicado removido — `pyproject.toml` (Poetry) é a fonte oficial de dependências.
+
+#### Dependências Não Utilizadas (Frontend)
+- **`@radix-ui/react-dialog`:** Nunca importado em nenhum componente `.tsx`.
+- **`@tauri-apps/plugin-opener`:** Nunca importado em nenhum componente `.tsx`.
+
+#### Documentação Desatualizada
+- **`Pano de Implementação Frontend.md`**, **`Plano de Implementação Backend.md`**, **`Walkthrough 1.md`:** Planos e walkthroughs do projeto inicial removidos — a estrutura do projeto já divergiu significativamente.
+
+#### Limpeza Estrutural
+- Diretórios vazios na raiz removidos: `db/`, `data/`, `models/`.
+
+### Corrigido
+- **Versão da API:** Corrigido `server.py` de `0.2.0` para `0.5.0` para sincronizar com `pyproject.toml` e `package.json`.
+
+---
+
 ## [0.5.0] - 2026-02-09
 
 ### Adicionado

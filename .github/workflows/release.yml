@@ -42,16 +42,20 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.target }}
           max-size: "500M"
 
+      - name: Setup CUDA Toolkit (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: Jimver/cuda-toolkit@v0.2.19
+        id: cuda-toolkit
+        with:
+          cuda: "11.8.0"
+          method: "network"
+
       - name: Install Python Dependencies
         shell: bash
         run: |
           cd app
 
-          # Ativar ccache se disponível
-          if [ "${{ matrix.os }}" != "windows-latest" ]; then
-            export CC="ccache gcc"
-            export CXX="ccache g++"
-          fi
+          # ccache is already configured via hendrikmuhs/ccache-action PATH symlinks
 
           poetry install --no-root
 
@@ -67,7 +71,10 @@ jobs:
             
           elif [ "${{ matrix.os }}" == "windows-latest" ]; then
             echo "Building with CUDA support for Windows..."
+            echo "CUDA path: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
             export CMAKE_ARGS="-DGGML_CUDA=on"
+            export CUDA_PATH="${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
+            export CUDAToolkit_ROOT="${{ steps.cuda-toolkit.outputs.CUDA_PATH }}"
             
             # Llama.cpp with CUDA
             poetry run pip install llama-cpp-python --force-reinstall --no-cache-dir
