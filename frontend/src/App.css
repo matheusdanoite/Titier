@@ -1,17 +1,49 @@
 /* ===== CSS Variables ===== */
 :root {
+  /* Default Dark Mode (Base) */
+  color-scheme: dark;
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
   --bg-tertiary: #1a1a24;
   --text-primary: #f0f0f5;
   --text-secondary: #8888a0;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
+
+  /* Scrollbar standard properties */
+  scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+  scrollbar-width: thin;
+
+  /* Accent Colors - Default Purple */
+  --accent-rgb: 99, 102, 241;
+  --accent: rgb(var(--accent-rgb));
+  --accent-hover: rgb(129, 140, 248);
+  /* Will be overridden dynamically if needed */
+
   --success: #22c55e;
   --warning: #eab308;
   --error: #ef4444;
+
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.08);
+
+  --pdf-bg: #1a1a24;
+  --modal-overlay: rgba(0, 0, 0, 0.7);
+  /* Default Dark PDF Bg */
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e2e8f0;
+  /* Slightly darker than edf2f7 for better visibility */
+  --text-primary: #1a202c;
+  --text-secondary: #718096;
+
+  --glass-bg: rgba(0, 0, 0, 0.03);
+  --glass-border: rgba(0, 0, 0, 0.08);
+
+  --pdf-bg: #f0f0f5;
+  --modal-overlay: rgba(255, 255, 255, 0.5);
 }
 
 /* ===== Reset ===== */
@@ -27,6 +59,7 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   overflow: hidden;
+  /* padding-top: 28px; - Removed to prevent transparency gap */
 }
 
 /* ===== Glass Panel ===== */
@@ -59,9 +92,14 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
+  padding-top: 42px;
+  /* Title Bar Clearance + normal padding */
   border-bottom: 1px solid var(--glass-border);
   background: var(--bg-secondary);
   gap: 16px;
+  /* Ensure header background is solid/blur if transparent titlebar is overlaying */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .header-left {
@@ -96,6 +134,10 @@ body {
   gap: 16px;
 }
 
+.sidebar-title {
+  pointer-events: none;
+}
+
 .pdf-name {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -103,6 +145,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .zoom-controls {
@@ -141,6 +184,42 @@ body {
   text-align: center;
 }
 
+.zoom-display {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 4px;
+}
+
+.zoom-input {
+  width: 3ch;
+  /* Fit 3 digits */
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: right;
+  outline: none;
+  padding: 0;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  /* Remove spinners for Firefox */
+}
+
+.zoom-display span {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.zoom-input::-webkit-outer-spin-button,
+.zoom-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  /* Remove spinners for Chrome/Safari */
+  margin: 0;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -175,7 +254,7 @@ body {
 }
 
 .pill.info {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   color: #a5b4fc;
 }
 
@@ -197,7 +276,16 @@ body {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
 }
+
+/* Enhanced visibility for buttons in light mode / general */
+.icon-button,
+.zoom-controls button {
+  background: var(--bg-tertiary);
+  /* Slight fill by default for contrast */
+}
+
 
 /* ===== PDF Viewer ===== */
 .pdf-viewer {
@@ -208,8 +296,9 @@ body {
   background:
     radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.03) 0%, transparent 50%),
-    var(--bg-primary);
+    var(--pdf-bg);
   overflow: hidden;
+  transition: background-color 0.3s ease;
 }
 
 .pdf-iframe {
@@ -250,7 +339,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   border: none;
   border-radius: 12px;
   color: white;
@@ -262,7 +351,7 @@ body {
 
 .upload-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.4);
 }
 
 /* ===== Resize Handle ===== */
@@ -329,7 +418,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 12px 20px;
+  padding-top: 42px;
+  /* Title Bar Clearance */
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -365,7 +456,7 @@ body {
 }
 
 .global-toggle.active {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -375,7 +466,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
   border-bottom: 1px solid var(--glass-border);
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -438,7 +529,7 @@ body {
 
 .message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   border-bottom-right-radius: 4px;
 }
 
@@ -580,7 +671,7 @@ body {
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   border: none;
   border-radius: 10px;
   color: white;
@@ -609,12 +700,74 @@ body {
   gap: 16px;
   background: rgba(10, 10, 15, 0.9);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--accent);
   font-size: 1.25rem;
   font-weight: 600;
   border: 3px dashed var(--accent);
   margin: 8px;
   border-radius: 16px;
+  pointer-events: none;
+}
+
+/* ===== Drop Like It's Hot Overlay ===== */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.drop-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  gap: 20px;
+  transform: scale(1);
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hot-icon-wrapper {
+  padding: 20px;
+  background: rgba(249, 115, 22, 0.15);
+  border-radius: 50%;
+  animation: bounce 1s infinite;
+  color: #f97316;
+}
+
+.drop-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.drop-content p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ===== Upload Toast ===== */
@@ -661,7 +814,9 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: 10px;
+  border: 2px solid var(--bg-secondary);
+  /* Creates space around thumb */
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -779,4 +934,156 @@ body {
 .start-chat-btn:hover {
   transform: scale(1.05);
   background: var(--accent-hover);
+}
+
+/* Highlight Toolbar */
+.highlight-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 8px;
+  margin-right: 16px;
+  border: 1px solid var(--glass-border);
+  max-width: 50vw;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tool-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.tool-btn.active {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+}
+
+.color-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.color-btn:hover {
+  transform: scale(1.1);
+}
+
+.color-btn.active {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.color-btn.yellow {
+  background: #facc15;
+}
+
+.color-btn.green {
+  background: #4ade80;
+}
+
+.color-btn.blue {
+  background: #60a5fa;
+}
+
+.color-btn.red {
+  background: #f87171;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--glass-border);
+  margin: 0 4px;
+}
+
+/* ===== Custom Context Menu ===== */
+.custom-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 8px 0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  min-width: 160px;
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.custom-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.custom-context-menu button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 8px 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Standalone Chat Window ===== */
+.app-container.standalone-chat {
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Add pointer-events: none to parent and reset in children if needed, 
+     but actually Tauri handles data-tauri-drag-region better if we just 
+     ensure internal non-interactive elements are passthrough */
+}
+
+.standalone-chat .chat-session-container {
+  height: 100vh;
+  border-left: none;
+}
+
+/* Ensure standalone windows have proper title bar clearance if needed */
+.standalone-chat .session-header {
+  padding-top: 42px;
 }

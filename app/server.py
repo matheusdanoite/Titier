@@ -12,6 +12,8 @@ import uvicorn
 import os
 import shutil
 import asyncio
+import json
+import fitz
 
 # Local imports
 # Local imports
@@ -19,6 +21,7 @@ from core.inference import LLMEngine, MultimodalEngine, get_backend_info
 from core.prompts import get_prompts, save_prompts, reset_prompts, get_defaults
 from core.model_manager import get_model_manager, RECOMMENDED_MODELS, DownloadStatus
 from db.vector_store import VectorStore
+from db.database import get_db
 from core.pdf_processor import PDFProcessor, HybridPDFProcessor
 
 # === App Setup ===
@@ -42,6 +45,7 @@ _chat_model: Optional[LLMEngine] = None
 _vision_model: Optional[MultimodalEngine] = None
 _vector_store: Optional[VectorStore] = None
 _pdf_processor: Optional[PDFProcessor] = None
+_abort_signal: bool = False
 
 # Paths
 UPLOAD_DIR = Path.home() / ".titier" / "uploads"
@@ -167,6 +171,12 @@ class ChatRequest(BaseModel):
     rag_chunks: Optional[int] = None  # Override manual do n_chunks
     highlight_only: Optional[bool] = None
     color_filter: Optional[str] = None
+    include_past_chats: bool = False  # Se deve incluir mensagens de outras conversas
+
+
+class TitleRequest(BaseModel):
+    message: str
+    response: str
 
 
 class ChatResponse(BaseModel):
@@ -179,6 +189,25 @@ class UploadResponse(BaseModel):
     filename: str
     chunks_added: int
     message: str
+    file_hash: str
+    summary: Optional[str] = None
+
+class MessageRequest(BaseModel):
+    role: str
+    content: str
+    sources: Optional[list] = None
+
+class SessionRequest(BaseModel):
+    id: str
+    title: str
+    color: Optional[str] = None
+    pdf_hash: Optional[str] = None
+    search_mode: str = "local"
+    include_other_chats: bool = False
+
+class SessionUpdateRequest(BaseModel):
+    search_mode: Optional[str] = None
+    include_other_chats: Optional[bool] = None
 
 
 # === Routes ===
@@ -358,55 +387,45 @@ async def chat(request: ChatRequest):
             stats = vs.get_stats()
             
             if stats.get("points_count", 0) > 0:
-                # Aplicar filtro se modo local e source_filter definido
+                # Determinar filtros de RAG
                 filter_source = None
-                if request.search_mode == "local" and request.source_filter:
-                    filter_source = request.source_filter
+                filter_hash = None
+                
+                if request.search_mode == "local":
+                    if request.source_filter:
+                        filter_source = request.source_filter
+                
+                # Se for global, não filtramos por source/hash
                 
                 # Limite dinâmico
                 limit = _get_dynamic_rag_limit(request, get_chat_model())
                 
-                # Detectar intenção de destaques/cores
-                msg_lower = request.message.lower()
-                h_only = request.highlight_only or False
-                c_filter = request.color_filter
-                if h_only is False:
-                    if any(kw in msg_lower for kw in ["grifado", "destaque", "marcado", "grifo"]):
-                        h_only = True
-                if c_filter is None:
-                    cores = ["amarelo", "verde", "azul", "vermelho", "rosa", "laranja", "cinza"]
-                    for cor in cores:
-                        if cor in msg_lower:
-                            c_filter = cor
-                            h_only = True
-                            break
-
+                # Contexto de mensagens passadas
+                include_chats = request.include_past_chats
+                
                 results = vs.search(
                     request.message, 
                     limit=limit,
                     source_filter=filter_source,
-                    highlight_only=h_only,
-                    color_filter=c_filter
+                    file_hash_filter=filter_hash,
+                    highlight_only=request.highlight_only or False,
+                    color_filter=request.color_filter,
+                    include_chats=include_chats,
+                    include_summaries=True
                 )
                 sources = results
                 context = "\n\n".join([r["text"] for r in results])
         except Exception as e:
             print(f"[Chat] Erro no RAG: {e}")
     
-    # Construir prompt usando prompts centralizados
+    # Construir prompt
     prompts = get_prompts()
-    if context:
-        system_content = prompts["system_rag"].format(context=context)
-    else:
-        system_content = prompts["system_base"]
+    system_content = prompts["system_rag"].format(context=context) if context else prompts["system_base"]
     
     # Gerar resposta
-    if not _chat_model:
-        # Tentar carregar se não estiver
-        get_chat_model()
-        
-    if _chat_model:
-        response_text = _chat_model.chat(
+    model = get_chat_model()
+    if model:
+        response_text = model.chat(
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": request.message}
@@ -416,10 +435,54 @@ async def chat(request: ChatRequest):
         return {
             "response": response_text,
             "sources": sources,
-            "model_used": _chat_model.model_path
+            "model_used": model.model_path
         }
     
     raise HTTPException(status_code=503, detail="Modelo de chat não disponível")
+
+
+@app.post("/chat/stop")
+async def chat_stop():
+    """Para a geração atual definindo o sinal de aborto."""
+    global _abort_signal
+    _abort_signal = True
+    print("[Chat] Sinal de parada enviado!")
+    return {"status": "stopping"}
+
+
+@app.post("/chat/generate-title")
+async def generate_title(request: TitleRequest):
+    """
+    Gera um título curto para a conversa baseado na primeira interação.
+    """
+    print(f"[Server] Recebida solicitação de título para mensagem: {request.message[:50]}...")
+    if not _chat_model:
+        get_chat_model()
+        
+    if not _chat_model:
+        raise HTTPException(status_code=503, detail="Modelo de chat não disponível")
+
+    try:
+        title = await _chat_model.chat_async(
+            messages=[
+                {"role": "system", "content": "Você é um assistente que gera títulos extremamente curtos (máximo 5 palavras) para conversas. Responda APENAS com o título, sem aspas, explicações ou pontuação final."},
+                {"role": "user", "content": f"Gere um título para esta conversa:\nUsuário: {request.message}\nAssistente: {request.response}"}
+            ],
+            max_tokens=20,
+            temperature=0.3
+        )
+        title = title.strip()
+        
+        # Limpezas básicas
+        title = title.replace('"', '').replace("'", "").replace(".", "").strip()
+        if len(title) > 50:
+            title = title[:47] + "..."
+            
+        print(f"[Server] Título gerado: {title}")
+        return {"title": title}
+    except Exception as e:
+        print(f"[Server] Erro ao gerar título: {e}")
+        return {"title": "Nova Conversa"}
 
 
 @app.post("/chat/stream")
@@ -468,7 +531,9 @@ async def chat_stream(request: ChatRequest):
                     limit=rag_limit, 
                     source_filter=filter_source,
                     highlight_only=h_only,
-                    color_filter=c_filter
+                    color_filter=c_filter,
+                    include_chats=request.include_past_chats,
+                    include_summaries=True
                 )
                 print(f"[Chat] Resultados encontrados: {len(results)}")
                 
@@ -492,27 +557,50 @@ async def chat_stream(request: ChatRequest):
 
     # 3. Gerador assíncrono para streaming
     async def event_generator():
-        # Enviar fontes primeiro como evento JSON especial
-        if sources:
-            import json
-            yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"
-        
-        model = get_chat_model()
-        if not model:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Modelo não carregado'})}\n\n"
-            return
+        try:
+            # Enviar fontes primeiro
+            if sources:
+                yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"
+            
+            model = get_chat_model()
+            if not model:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Modelo não carregado'})}\n\n"
+                return
 
-        async for token in model.chat_stream(messages, max_tokens=request.max_tokens):
-            # Enviar cada token
-            # Formato SSE: data: <conteudo>\n\n
-            if token:
-                # Escape newlines for SSE data payload if needed, but simple replacement works for most clients
-                # Or just send JSON for safety
-                import json
-                payload = json.dumps({"type": "token", "content": token})
-                yield f"data: {payload}\n\n"
-        
-        yield "data: [DONE]\n\n"
+            global _abort_signal
+            _abort_signal = False 
+
+            # Lista de tokens de parada comuns para limpar da saída
+            stop_tokens = ["</s>", "<|end_of_text|>", "<|eot_id|>", "<|end|>"]
+
+            async for token in model.chat_stream(
+                messages, 
+                max_tokens=request.max_tokens,
+                abort_check=lambda: _abort_signal
+            ):
+                if _abort_signal:
+                    yield f"data: {json.dumps({'type': 'token', 'content': ' [Interrompido]'})}\n\n"
+                    break
+                
+                if token:
+                    # Filtrar tokens de encerramento que a LLM possa vazar
+                    clean_token = token
+                    for st in stop_tokens:
+                        if st in clean_token:
+                            clean_token = clean_token.replace(st, "")
+                    
+                    if clean_token:
+                        payload = json.dumps({"type": "token", "content": clean_token})
+                        yield f"data: {payload}\n\n"
+            
+            # Sinalizar finalização para o frontend disparar o auto-título
+            yield f"data: {json.dumps({'type': 'finished'})}\n\n"
+        except Exception as e:
+            print(f"[Server] Erro crítico no stream: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            print("[Server] Stream finalizado.")
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -536,6 +624,9 @@ async def upload_pdf(file: UploadFile = File(...)):
     file_hash = vs.compute_file_hash(str(file_path))
     
     # Passo 1 (Workflow): Verificar Hash
+    db = get_db()
+    existing_summary = db.get_summary(file_hash)
+    
     if vs.is_document_indexed(file_hash):
         print(f"[Upload] Documento {file.filename} já indexado.")
         
@@ -546,20 +637,24 @@ async def upload_pdf(file: UploadFile = File(...)):
         return UploadResponse(
             filename=file.filename,
             chunks_added=0,
-            message="Documento já indexado. Chat pronto!"
+            message="Documento já indexado. Chat pronto!",
+            file_hash=file_hash,
+            summary=existing_summary
         )
     
-    # Passo 2: Analisar conteúdo (Scan)
-    temp_processor = get_pdf_processor(use_vision=False)
-    has_images = temp_processor.has_images(str(file_path))
-    
-    # Passo 3: Processamento Condicional
+    # Passo 2: Analisar e Processar (Scan)
     chunks = []
     try:
+        # Tentar processar tudo em uma única passada
+        # Obter primeiro o processador padrão para verificação rápida
+        temp_processor = get_pdf_processor(use_vision=False)
+        with fitz.open(file_path) as doc:
+            has_images = temp_processor.has_images(doc)
+        
         if has_images:
             print(f"[Upload] Imagens detectadas em {file.filename}. Iniciando pipeline de Visão...")
             try:
-                # Carregar Vision Model (unload chat se necessário)
+                # O HybridPDFProcessor.process já faz a análise completa
                 vision_processor = get_pdf_processor(use_vision=True)
                 chunks = vision_processor.process(str(file_path))
                 
@@ -568,10 +663,8 @@ async def upload_pdf(file: UploadFile = File(...)):
                 unload_models()
             except Exception as vision_error:
                 print(f"[Upload] Modelo de visão falhou ({vision_error}). Usando OCR fallback...")
-                # Fallback: usar HybridPDFProcessor com VisionOCR ou RapidOCR
-                ocr_processor = get_pdf_processor(use_vision=True) # Vai tentar vision_ocr internally
+                ocr_processor = get_pdf_processor(use_vision=True)
                 chunks = ocr_processor.process(str(file_path))
-                print("[Upload] Fallback OCR: Texto extraído via OCR Engine.")
         else:
             print(f"[Upload] Apenas texto detectado em {file.filename}. Usando pipeline padrão...")
             chunks = temp_processor.process(str(file_path))
@@ -593,12 +686,117 @@ async def upload_pdf(file: UploadFile = File(...)):
     # Passo 5: Estado Final (Carregar Chat)
     print("[Upload] Indexação concluída. Carregando modelo de chat...")
     get_chat_model()
-    
+
+    # Gerar resumo imediato se não existir
+    summary = None
+    if not existing_summary:
+        print(f"[Upload] Gerando resumo automático para {file_hash}...")
+        summary_prompt = "Analise o documento e produza um resumo estruturado e completo. Use Markdown."
+        try:
+            # Pegar alguns chunks para o resumo
+            sampled_text = "\n\n".join(texts[:10])
+            summary = _chat_model.chat(
+                messages=[
+                    {"role": "system", "content": "Você é um assistente especializado em resumir documentos escolares/acadêmicos."},
+                    {"role": "user", "content": f"Resuma este documento:\n\n{sampled_text}"}
+                ],
+                max_tokens=1000
+            )
+            db.save_summary(file_hash, summary)
+            # Indexar resumo no VectorStore para consultas futuras
+            vs.add_documents([summary], [{"file_hash": file_hash, "is_summary": True, "source": file.filename}])
+        except Exception as e:
+            print(f"[Upload] Erro ao gerar resumo: {e}")
+
     return UploadResponse(
         filename=file.filename,
         chunks_added=count,
-        message=f"PDF processado ({'Visual' if has_images else 'Texto'}) e indexado! Chat pronto."
+        message=f"PDF processado ({'Visual' if has_images else 'Texto'}) e indexado! Chat pronto.",
+        file_hash=file_hash,
+        summary=summary or existing_summary
     )
+
+# --- Chat Persistence Routes ---
+
+@app.get("/sessions")
+async def list_sessions():
+    db = get_db()
+    return db.get_sessions()
+
+@app.post("/sessions")
+async def save_session(request: SessionRequest):
+    db = get_db()
+    db.save_session(
+        request.id, 
+        request.title, 
+        request.color, 
+        request.pdf_hash, 
+        request.search_mode, 
+        request.include_other_chats
+    )
+    return {"status": "success"}
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    db = get_db()
+    db.delete_session(session_id)
+    return {"status": "success"}
+
+@app.post("/sessions/{session_id}")
+async def update_session(session_id: str, request: SessionUpdateRequest):
+    db = get_db()
+    db.update_session_settings(
+        session_id, 
+        request.search_mode, 
+        request.include_other_chats
+    )
+    return {"status": "success"}
+
+@app.delete("/sessions")
+async def delete_all_sessions():
+    """Remove todas as sessões e mensagens do banco de dados."""
+    db = get_db()
+    db.delete_all_sessions()
+    
+    # Opcional: Limpar mensagens indexadas no VectorStore (RAG)
+    try:
+        vs = get_vector_store()
+        # Nota: VectorStore.delete_all_sessions seria ideal, mas por enquanto 
+        # removemos apenas do SQLite. Se o usuário quiser limpar RAG, ele usa /documents DELETE.
+        pass
+    except:
+        pass
+        
+    return {"status": "success"}
+
+@app.get("/sessions/{session_id}/messages")
+async def get_messages(session_id: str):
+    db = get_db()
+    return db.get_messages(session_id)
+
+@app.post("/sessions/{session_id}/messages")
+async def add_message(session_id: str, request: MessageRequest):
+    db = get_db()
+    db.add_message(session_id, request.role, request.content, request.sources)
+    
+    # Indexar no VectorStore para RAG futuro
+    try:
+        if request.role == "user" or request.role == "assistant":
+            vs = get_vector_store()
+            vs.add_documents(
+                [request.content], 
+                [{"session_id": session_id, "is_chat_message": True, "role": request.role}]
+            )
+    except Exception as e:
+        print(f"[RAG] Erro ao indexar mensagem: {e}")
+        
+    return {"status": "success"}
+
+@app.post("/sessions/{session_id}/rename")
+async def rename_session(session_id: str, title: str):
+    db = get_db()
+    db.update_session_title(session_id, title)
+    return {"status": "success"}
 
 
 @app.get("/documents")

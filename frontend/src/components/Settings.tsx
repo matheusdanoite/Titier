@@ -14,7 +14,11 @@ import {
     FileText,
     MessageSquare,
     RotateCcw,
-    Save
+
+    Save,
+    Palette,
+    Sun,
+    Moon
 } from 'lucide-react';
 import './Settings.css';
 import './Onboarding.css';
@@ -24,6 +28,22 @@ const API_URL = 'http://127.0.0.1:8000';
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
+    themeMode: 'light' | 'dark';
+    setThemeMode: (mode: 'light' | 'dark') => void;
+    accentColor: string;
+    setAccentColor: (color: string) => void;
+    colorTemp: number;
+    setColorTemp: (temp: number) => void;
+
+    pdfBgColor: string;
+    setPdfBgColor: (color: string) => void;
+    applyPdfTint: boolean;
+    setApplyPdfTint: (apply: boolean) => void;
+    multiWindowMode: boolean;
+    setMultiWindowMode: (enabled: boolean) => void;
+    defaultMultiChatContext: boolean;
+    setDefaultMultiChatContext: (enabled: boolean) => void;
+    onClearAllSessions: () => Promise<void>;
 }
 
 interface Model {
@@ -59,14 +79,33 @@ interface SystemStats {
 
 
 
-export function Settings({ isOpen, onClose }: SettingsProps) {
-    const [activeTab, setActiveTab] = useState<'models' | 'database' | 'prompts'>('models');
+export function Settings({
+    isOpen,
+    onClose,
+    themeMode,
+    setThemeMode,
+    accentColor,
+    setAccentColor,
+    colorTemp,
+
+    setColorTemp,
+    pdfBgColor,
+    setPdfBgColor,
+    applyPdfTint,
+    setApplyPdfTint,
+    multiWindowMode,
+    setMultiWindowMode,
+    defaultMultiChatContext,
+    setDefaultMultiChatContext,
+    onClearAllSessions
+}: SettingsProps) {
+    const [activeTab, setActiveTab] = useState<'models' | 'database' | 'prompts' | 'graphics'>('models');
     const [stats, setStats] = useState<SystemStats | null>(null);
     const [models, setModels] = useState<Model[]>([]);
 
     const [isClearing, setIsClearing] = useState(false);
     const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
-    const [hoveredModel, setHoveredModel] = useState<string | null>(null);
+
     const [confirmAction, setConfirmAction] = useState<{
         title: string;
         message: string;
@@ -374,6 +413,27 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         >
                             <MessageSquare size={18} /> Prompts
                         </button>
+                        <button
+                            className={`settings-tab ${activeTab === 'graphics' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('graphics')}
+                        >
+                            <Palette size={18} /> Gráficos
+                        </button>
+
+                        {stats && (
+                            <div className="settings-sidebar-footer">
+                                <div className="sidebar-stat">
+                                    <span className="stat-label">Architecture</span>
+                                    <span className={`stat-value ${stats.gpu_available ? 'success' : 'warning'}`}>
+                                        {stats.backend?.toUpperCase() || 'UNKNOWN'}
+                                    </span>
+                                </div>
+                                <div className="sidebar-stat">
+                                    <span className="stat-label">Core Version</span>
+                                    <span className="stat-value">{stats.version || '0.2.0'}</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="settings-panel">
@@ -491,7 +551,26 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                                             disabled={isClearing}
                                         >
                                             {isClearing ? <Loader2 className="spin" /> : <Trash2 size={18} />}
-                                            {isClearing ? 'Limpando...' : 'Limpar Tudo'}
+                                            {isClearing ? 'Limpando...' : 'Limpar Bancos'}
+                                        </button>
+                                    </div>
+                                    <div className="danger-action" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                        <p>Apagar todo o histórico de conversas ("Minhas Conversas").</p>
+                                        <button
+                                            className="danger-button"
+                                            onClick={() => {
+                                                setConfirmAction({
+                                                    title: 'Apagar Histórico',
+                                                    message: 'Tem certeza que deseja apagar todas as conversas? Isso não pode ser desfeito.',
+                                                    action: async () => {
+                                                        setConfirmAction(null);
+                                                        await onClearAllSessions();
+                                                    }
+                                                });
+                                            }}
+                                        >
+                                            <Trash2 size={18} />
+                                            Apagar Conversas
                                         </button>
                                     </div>
                                 </div>
@@ -562,6 +641,180 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                                     >
                                         <RotateCcw size={16} /> Restaurar Padrão
                                     </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'graphics' && (
+                            <div className="panel-section">
+                                <h3>Aparência e Gráficos</h3>
+
+                                <div className="prompt-group">
+                                    <label className="prompt-label">Tema do Sistema</label>
+                                    <p className="prompt-hint">Escolha entre o modo claro e escuro.</p>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                        <button
+                                            className={`model-button ${themeMode === 'light' ? 'installed' : ''}`}
+                                            onClick={() => setThemeMode('light')}
+                                            style={{ flex: 1, justifyContent: 'center', background: themeMode === 'light' ? 'var(--accent)' : 'rgba(var(--accent-rgb), 0.1)', color: themeMode === 'light' ? '#fff' : 'var(--text-primary)' }}
+                                        >
+                                            <Sun size={18} /> Claro
+                                        </button>
+                                        <button
+                                            className={`model-button ${themeMode === 'dark' ? 'installed' : ''}`}
+                                            onClick={() => setThemeMode('dark')}
+                                            style={{ flex: 1, justifyContent: 'center', background: themeMode === 'dark' ? 'var(--accent)' : 'rgba(var(--accent-rgb), 0.1)', color: themeMode === 'dark' ? '#fff' : 'var(--text-primary)' }}
+                                        >
+                                            <Moon size={18} /> Escuro
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="prompt-group" style={{ marginTop: '30px' }}>
+                                    <label className="prompt-label">Cor de Destaque</label>
+                                    <p className="prompt-hint">Selecione a cor principal da aplicação. Afeta botões, bordas e detalhes.</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '10px' }}>
+                                        <input
+                                            type="color"
+                                            value={accentColor}
+                                            onChange={(e) => setAccentColor(e.target.value)}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: 0,
+                                                width: '60px',
+                                                height: '40px',
+                                                cursor: 'pointer'
+                                            }}
+                                        />
+                                        <button
+                                            className="model-button"
+                                            onClick={() => setAccentColor('#6366f1')}
+                                            title="Restaurar Roxo Titier"
+                                            style={{ width: 'auto', gap: '6px', height: '40px', display: 'flex', alignItems: 'center' }}
+                                        >
+                                            <RotateCcw size={14} /> Roxo Titier
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="prompt-group" style={{ marginTop: '30px' }}>
+                                    <label className="prompt-label">Fundo do PDF</label>
+                                    <p className="prompt-hint">Personalize a cor de fundo da área de visualização do documento.</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '10px' }}>
+                                        <input
+                                            type="color"
+                                            value={pdfBgColor}
+                                            onChange={(e) => setPdfBgColor(e.target.value)}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: 0,
+                                                width: '100px',
+                                                height: '40px',
+                                                cursor: 'pointer'
+                                            }}
+                                        />
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <button
+                                                className="model-button installed"
+                                                onClick={() => setPdfBgColor('#f0f0f5')} // Light Default
+                                                title="Padrão Claro"
+                                                style={{ padding: '0 12px', width: 'auto', height: '40px', display: 'flex', alignItems: 'center' }}
+                                            >
+                                                Original
+                                            </button>
+                                            <button
+                                                className="model-button installed"
+                                                onClick={() => setPdfBgColor('#1a1a24')} // Dark Default
+                                                title="Padrão Escuro"
+                                                style={{ padding: '0 12px', width: 'auto', background: '#1a1a24', color: '#fff', height: '40px', display: 'flex', alignItems: 'center' }}
+                                            >
+                                                Dark
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="prompt-group" style={{ marginTop: '30px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <label className="prompt-label">Temperatura de Cor (Conforto Ocular)</label>
+                                            <p className="prompt-hint">Ajuste para tons mais quentes para reduzir a fatiga visual.</p>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                id="applyPdfTint"
+                                                checked={applyPdfTint}
+                                                onChange={(e) => setApplyPdfTint(e.target.checked)}
+                                                style={{ width: '16px', height: '16px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                                            />
+                                            <label htmlFor="applyPdfTint" style={{ fontSize: '0.9rem', color: 'var(--text-primary)', cursor: 'pointer' }}>Aplicar ao PDF</label>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '16px', padding: '0 10px' }}>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={colorTemp}
+                                            onChange={(e) => setColorTemp(parseInt(e.target.value))}
+                                            style={{ width: '100%' }}
+                                        />
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            marginTop: '8px',
+                                            fontSize: '0.8rem',
+                                            color: 'var(--text-secondary)'
+                                        }}>
+                                            <span>Neutro (0%)</span>
+                                            <span>Quente (100%)</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="prompt-group" style={{ marginTop: '30px', padding: '16px', background: 'rgba(var(--accent-rgb), 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <label className="prompt-label" style={{ marginBottom: 0 }}>Múltiplas Janelas (Beta)</label>
+                                                <div style={{ background: 'var(--accent)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>ULTRA-WIDE</div>
+                                            </div>
+                                            <p className="prompt-hint" style={{ marginTop: '4px' }}>Abre cada chat em uma janela independente do sistema operacional. Ideal para múltiplos monitores.</p>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                id="multiWindowMode"
+                                                checked={multiWindowMode}
+                                                onChange={(e) => setMultiWindowMode(e.target.checked)}
+                                                style={{ width: '20px', height: '20px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="prompt-group" style={{ marginTop: '16px', padding: '16px', background: 'rgba(var(--accent-rgb), 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <label className="prompt-label" style={{ marginBottom: 0 }}>Contexto Multi-Chat</label>
+                                                <div style={{ background: 'var(--accent)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>RAG</div>
+                                            </div>
+                                            <p className="prompt-hint" style={{ marginTop: '4px' }}>Permite que a IA consulte conhecimentos de outros chats passados por padrão.</p>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                id="defaultMultiChatContext"
+                                                checked={defaultMultiChatContext}
+                                                onChange={(e) => setDefaultMultiChatContext(e.target.checked)}
+                                                style={{ width: '20px', height: '20px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

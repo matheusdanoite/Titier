@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, FileText, ChevronDown, Sparkles, X } from 'lucide-react';
+import { Send, FileText, ChevronDown, Sparkles, X, Square, Database, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Markdown from 'react-markdown';
 import './ChatSession.css';
@@ -24,9 +24,15 @@ export interface ChatSessionProps {
     initialMessages?: Message[];
     onMessagesChange?: (messages: Message[]) => void;
     autoStartPrompt?: string | null;
+    onGenerationFinished?: (lastAssistantMsg: string) => void;
+    color?: string;
+    includeOtherChats?: boolean;
+    onToggleIncludeOtherChats?: (val: boolean) => void;
+    onToggleSearchMode?: (val: 'local' | 'global') => void;
 }
 
 export const ChatSession: React.FC<ChatSessionProps> = ({
+    sessionId,
     title,
     isActive,
     onClose,
@@ -34,7 +40,12 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
     searchMode = 'local',
     initialMessages = [],
     onMessagesChange,
-    autoStartPrompt
+    autoStartPrompt,
+    onGenerationFinished,
+    color,
+    includeOtherChats = false,
+    onToggleIncludeOtherChats,
+    onToggleSearchMode
 }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [input, setInput] = useState('');
@@ -50,15 +61,40 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
         }
     }, [messages, isActive]);
 
-    const handleMessagesUpdate = (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
+    const handleMessagesUpdate = async (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
         setMessages(prev => {
             const updated = typeof newMessages === 'function' ? newMessages(prev) : newMessages;
+
             if (onMessagesChange) {
-                // Defer update to avoid render cycle issues, or just call it
                 setTimeout(() => onMessagesChange(updated), 0);
             }
             return updated;
         });
+    };
+
+    const saveMessageToBackend = async (role: string, content: string, sources?: any[]) => {
+        try {
+            await fetch(`${API_URL}/sessions/${sessionId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, content, sources })
+            });
+        } catch (e) {
+            console.error('Failed to save message to backend:', e);
+        }
+    };
+
+    const [isStopping, setIsStopping] = useState(false);
+
+    const stopGeneration = async () => {
+        setIsStopping(true);
+        try {
+            await fetch(`${API_URL}/chat/stop`, { method: 'POST' });
+        } catch (e) {
+            console.error("Erro ao parar geração:", e);
+        } finally {
+            // isStopping will be reset when sendMessage finishes its try/catch/finally
+        }
     };
 
     const sendMessage = async (overridePrompt?: string) => {
@@ -94,9 +130,13 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                     message: userMsg.content,
                     source_filter: contextFilter,
                     search_mode: searchMode,
-                    // TODO: Pass history properly if backend supports it
+                    color_filter: color,
+                    include_past_chats: includeOtherChats
                 })
             });
+
+            // Save user message to backend
+            saveMessageToBackend('user', userMsg.content);
 
             if (!response.ok) throw new Error(response.statusText);
 
@@ -104,18 +144,25 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
             if (!reader) throw new Error("No reader available");
 
             const decoder = new TextDecoder();
+            let buffer = '';
+            let streamDone = false;
 
-            while (true) {
+            while (!streamDone) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n\n');
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        if (data === '[DONE]') break;
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('data: ')) {
+                        const data = trimmedLine.slice(6);
+                        if (data === '[DONE]') {
+                            streamDone = true;
+                            break;
+                        }
 
                         try {
                             const parsed = JSON.parse(data);
@@ -129,11 +176,15 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                                 ));
                             } else if (parsed.type === 'sources') {
                                 sources = parsed.data;
+                            } else if (parsed.type === 'finished') {
+                                if (onGenerationFinished) {
+                                    onGenerationFinished(fullResponse);
+                                }
                             } else if (parsed.type === 'error') {
                                 fullResponse += `\n\n[Erro: ${parsed.message}]`;
                             }
                         } catch (e) {
-                            console.error("Erro ao parsear SSE:", e);
+                            console.error("Erro ao parsear JSON no SSE:", e, "Data:", data);
                         }
                     }
                 }
@@ -142,11 +193,17 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
             fullResponse += "\n\n[Erro de conexão com o servidor]";
         } finally {
             setLoading(false);
+            setIsStopping(false);
             handleMessagesUpdate(prev => prev.map(msg =>
                 msg.id === assistantMsgId
                     ? { ...msg, content: fullResponse, isStreaming: false, sources: sources }
                     : msg
             ));
+
+            // Save assistant message to backend
+            if (fullResponse) {
+                saveMessageToBackend('assistant', fullResponse, sources);
+            }
         }
     };
 
@@ -163,16 +220,36 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
     return (
         <div className="chat-session-container">
             {/* Header da Sessão (caso mostrado em modo grid/multi-view) */}
-            <div className="session-header">
-                <div className="session-info">
-                    <span className="session-icon"><Sparkles size={14} /></span>
-                    <span className="session-title">{title}</span>
+            <div className="session-header" data-tauri-drag-region>
+                <div className="session-info" data-tauri-drag-region>
+                    <span className="session-icon" style={{ color: color || 'var(--accent)' }} data-tauri-drag-region><Sparkles size={14} /></span>
+                    <span className="session-title" data-tauri-drag-region>{title}</span>
                 </div>
-                {onClose && (
-                    <button onClick={onClose} className="close-session-btn" title="Fechar conversa">
-                        <X size={14} />
+
+                <div className="session-controls">
+                    {/* Search Mode Toggle */}
+                    <button
+                        className={`control-btn ${searchMode === 'global' ? 'active' : ''}`}
+                        onClick={() => onToggleSearchMode?.(searchMode === 'local' ? 'global' : 'local')}
+                        title={searchMode === 'local' ? "Pesquisar apenas neste documento" : "Pesquisar em todos os documentos"}
+                    >
+                        {searchMode === 'local' ? <FileText size={14} /> : <Database size={14} />}
+                        <span>{searchMode === 'local' ? 'Local' : 'Global'}</span>
                     </button>
-                )}
+
+                    {/* Multi-Chat Context Toggle */}
+                    <button
+                        className={`control-btn ${includeOtherChats ? 'active' : ''}`}
+                        onClick={() => onToggleIncludeOtherChats?.(!includeOtherChats)}
+                        title="Incluir contexto de outras conversas"
+                    >
+                        <MessageSquare size={14} />
+                    </button>
+
+                    {onClose && (
+                        <button className="close-btn" onClick={onClose}><X size={14} /></button>
+                    )}
+                </div>
             </div>
 
             {/* Lista de Mensagens */}
@@ -182,6 +259,7 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                         <Sparkles size={48} className="empty-icon" />
                         <h3>Comece uma nova conversa</h3>
                         <p>{contextFilter ? `Contexto: ${contextFilter}` : "Contexto Global"}</p>
+                        {color && <p style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.8 }}>Filtro de cor: <span style={{ display: 'inline-block', width: '10px', height: '10px', backgroundColor: color, borderRadius: '50%', marginLeft: '4px' }}></span></p>}
                     </div>
                 ) : (
                     messages.map((msg) => (
@@ -247,15 +325,16 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                        placeholder={`Pergunte algo sobre ${contextFilter || 'seus documentos'}...`}
+                        placeholder={`O que vamos ler hoje?`}
                         disabled={loading}
                     />
                     <button
-                        onClick={() => sendMessage()}
-                        disabled={!input.trim() || loading}
-                        className="send-btn"
+                        onClick={() => loading ? stopGeneration() : sendMessage()}
+                        disabled={(!input.trim() && !loading) || isStopping}
+                        className={`send-btn ${loading ? 'loading' : ''} ${isStopping ? 'stopping' : ''}`}
+                        title={isStopping ? "Parando..." : (loading ? "Parar geração" : "Enviar mensagem")}
                     >
-                        <Send size={16} />
+                        {loading ? <Square size={16} fill="currentColor" /> : <Send size={16} />}
                     </button>
                 </div>
             </div>

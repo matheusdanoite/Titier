@@ -39,7 +39,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
                     <div className="icon-wrapper">
                         <motion.div
-                            animate={isDragging ? { scale: 1.2, rotate: 10 } : { scale: 1, rotate: 0 }}
+                            animate={{ scale: 1, rotate: 0 }}
                             className="main-icon-container"
                         >
                             <Upload size={64} className="main-icon" />
@@ -70,21 +70,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                 </motion.div>
             </div>
 
-            {/* Drag Hint Overlay (only visible when dragging) */}
-            {isDragging && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="drag-hint-overlay"
-                >
-                    <div className="drag-hint-content">
-                        <div className="upload-circle">
-                            <Upload size={48} />
-                        </div>
-                        <h3>Solte para fazer o upload</h3>
-                    </div>
-                </motion.div>
-            )}
+            {/* Drag Hint Overlay removed in favor of global App.tsx overlay */}
         </div>
     );
 };

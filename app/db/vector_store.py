@@ -221,7 +221,10 @@ class VectorStore:
         source_filter: Optional[str] = None,
         file_hash_filter: Optional[str] = None,
         highlight_only: bool = False,
-        color_filter: Optional[str] = None
+        color_filter: Optional[str] = None,
+        include_chats: bool = True,
+        include_summaries: bool = True,
+        session_id_filter: Optional[str] = None
     ) -> list[dict]:
         """
         Busca semântica por documentos similares.
@@ -234,6 +237,9 @@ class VectorStore:
             file_hash_filter: Filtrar por hash do arquivo (mais preciso)
             highlight_only: Se True, retorna apenas trechos grifados
             color_filter: Filtrar por cor específica (ex: 'verde', 'amarelo')
+            include_chats: Se False, exclui mensagens de chat
+            include_summaries: Se False, exclui resumos
+            session_id_filter: Filtrar mensagens de uma sessão específica
         
         Returns:
             Lista de payloads com scores
@@ -259,8 +265,30 @@ class VectorStore:
             
         if color_filter:
             conditions.append(FieldCondition(key="highlight_color", match=MatchValue(value=color_filter.lower())))
+
+        # Filtros de Chat/Resumo
+        if not include_chats:
+            # Qdrant v1.7+ might need a "must_not" for this, or we just handle it via logical NOT if supported
+            # Here we use a simpler approach: if include_chats is False, we filter where is_chat_message is not True
+            # Since Qdrant is schema-less per point, we might need to be careful.
+            # actually, using models.FieldCondition(key="is_chat_message", match=MatchValue(value=True)) in MUST_NOT
+            pass
+
+        # For simplicity and robustness with current code structure:
+        # We will build a Filter with MUST and MUST_NOT
+        must_conditions = conditions
+        must_not_conditions = []
+        
+        if not include_chats:
+            must_not_conditions.append(FieldCondition(key="is_chat_message", match=MatchValue(value=True)))
+        
+        if not include_summaries:
+            must_not_conditions.append(FieldCondition(key="is_summary", match=MatchValue(value=True)))
             
-        search_filter = Filter(must=conditions) if conditions else None
+        if session_id_filter:
+             must_conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id_filter)))
+
+        search_filter = Filter(must=must_conditions, must_not=must_not_conditions) if (must_conditions or must_not_conditions) else None
         
         # API atualizada do Qdrant (v1.7+)
         results = self.client.query_points(

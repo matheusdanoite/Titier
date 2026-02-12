@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Titier",
@@ -17,7 +18,10 @@
         "height": 800,
         "center": true,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "transparent": true,
+        "titleBarStyle": "Overlay",
+        "dragDropEnabled": true
       }
     ],
     "security": {

@@ -21,7 +21,7 @@
     left: -10%;
     width: 50%;
     height: 50%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--accent-rgb), 0.1) 0%, transparent 70%);
     filter: blur(60px);
     z-index: 1;
 }
@@ -58,7 +58,7 @@
 
 .empty-state-container.is-dragging .empty-state-card {
     border-color: var(--accent);
-    box-shadow: 0 0 40px rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 40px rgba(var(--accent-rgb), 0.15);
 }
 
 .settings-shortcut-container {
@@ -134,7 +134,7 @@
     gap: 12px;
     padding: 18px;
     font-size: 1.1rem;
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.2);
 }
 
 .drop-indicator {
@@ -173,7 +173,7 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    background: rgba(99, 102, 241, 0.1);
+    background: rgba(var(--accent-rgb), 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -182,13 +182,15 @@
 
 @keyframes pulse-border {
     0% {
-        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+        box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.4);
     }
+
     70% {
-        box-shadow: 0 0 0 20px rgba(99, 102, 241, 0);
+        box-shadow: 0 0 0 20px rgba(var(--accent-rgb), 0);
     }
+
     100% {
-        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+        box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0);
     }
 }
 

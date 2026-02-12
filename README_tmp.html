@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>README.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="titier">Titier</h1>
+<p><img src="https://img.shields.io/badge/Status-Em_Desenvolvimento-warning" alt="Status">
+<img src="https://img.shields.io/badge/License-MIT-blue" alt="License">
+<img src="https://img.shields.io/badge/Python-3.11-blue" alt="Python">
+<img src="https://img.shields.io/badge/Tauri-2.0-orange" alt="Tauri">
+<img src="https://img.shields.io/badge/React-19-blue" alt="React"></p>
+<p>&quot;Então você usa o NotebookLM&quot;, disse um amigo quando eu contei o próposito deste software, que nasceu da necessidade do meu amigo Cássio: um editor de PDF para que ele pudesse ler e fazer anotações, mas com uma IA integrada para deixar os textos de uma graduação de ciências humanas muito mais digeríveis. Menos para um NotebookLM e mais para um Acrobat Reader com a IA da Adobe, talvez. É verdade, poderia usar qualquer um desses dois, mas o Cássio também tem um PC foderoso. Pensando em extrair o máximo do poder computacional com algo que não fosse League of Legends, decidimos entrar nessa jornada de criação do Titier.</p>
+<p><strong>O Titier é um assistente de estudos impulsionado por IA que funciona de forma 100% local e privada.</strong></p>
+<p>Privacidade é prioridade para o Titier. Os dados do seu PDF não saem do seu dispositivo; nenhum tipo de dado sai, na verdade. A IA roda localmente de maneira profundamente integrada à máquina, utilizando muitos recursos, é verdade, mas é legal para quem gosta de puxar o hardware ao seu limite.</p>
+<p>O Titier aceita modelos em formato GGUF para a inferência de texto, e o PaddleOCR é usado para reconhecimento de caracteres em PDFs com imagens (ou escaneados). Isso significa que você pode utilizar o modelo que você quiser, e sua máquina aceitar, para realizar o processo de inferência.</p>
+<h2 id="como-funciona-o-titier">Como funciona o Titier</h2>
+<p>Ao enviar um arquivo PDF, é realizada uma verificação do seu conteúdo: se há texto puro, se há imagens, se há anotações e se há trechos destacados, bem como suas respectivas cores. Se houver imagens, o PaddleOCR é utilizado para extrair o texto das imagens. Tanto o texto extraído de imagens quanto o texto puro de PDFs mais bem formatados são indexados e armazenados localmente. Anotações de mesmas cores são mantidas em um só contexto, isto é, o Titier entende que estes trechos grifados possuem conteúdo relacionado. Você pode perguntar &quot;o que está grifado em amarelo?&quot; e o Titier responde.</p>
+<h2 id="funcionalidades">Funcionalidades</h2>
+<ul>
+<li><strong>100% Local (Privacidade Total):</strong> Seus documentos e conversas nunca saem do seu computador.</li>
+<li><strong>IA Multimodal:</strong> Entende texto, tabelas, gráficos e anotações manuscritas.</li>
+<li><strong>RAG (Retrieval-Augmented Generation):</strong> Respostas baseadas no conteúdo dos seus PDFs.</li>
+<li><strong>Chat Multi-Sessão:</strong> Gerencie múltiplas conversas simultâneas com contextos independentes.</li>
+<li><strong>Streaming em Tempo Real:</strong> Respostas exibidas token a token para feedback instantâneo.</li>
+<li><strong>Resumo Automático Estruturado:</strong> Ao abrir um PDF, o Titier gera um resumo completo com visão geral, pontos-chave, resumo detalhado e conclusões.</li>
+<li><strong>Extração de Destaques:</strong> Captura textos grifados, suas cores e anotações; cada cor gera um novo &quot;assunto&quot; dentro do PDF e seu conteúdo é priorizado nas respostas.</li>
+<li><strong>Interface Bonita:</strong> Softwares feios que me desculpem, mas estética é fundamental.</li>
+<li><strong>Prompts Customizáveis:</strong> Personalize os prompts de sistema diretamente pelas Configurações para adaptar o Titier ao seu estilo de estudo.</li>
+<li><strong>Performance Nativa &amp; Inteligente:</strong> Backend otimizado (Metal/CUDA) que se auto-configura baseado no seu hardware.</li>
+<li><strong>Otimizado para MacBook Air M1 8GB:</strong> Configurações específicas para garantir que o Titier rode no meu singelo Mac.</li>
+</ul>
+<h2 id="tecnologias">Tecnologias</h2>
+<ul>
+<li><strong>Backend:</strong> Python 3.11, FastAPI, Qdrant (Vetores), PyMuPDF.</li>
+<li><strong>AI Engine:</strong> <code>llama-cpp-python</code> para visão e linguagem, <code>PaddleOCR-VL-1.5</code> (Vision OCR) e <code>rapidocr-onnxruntime</code>.</li>
+<li><strong>Frontend:</strong> Tauri v2, React, TypeScript, Vite.</li>
+</ul>
+<p><strong>Modelos de IA:</strong>
+O Titier é inteligente o suficiente para recomendar o melhor modelo para seu PC:</p>
+<ul>
+<li><strong>Mac (8GB)</strong>: Recomendamos o <strong>Llama 3.2 3B</strong> para máxima estabilidade.</li>
+<li><strong>Hardware Superior</strong>: O sistema sugerirá modelos maiores como <strong>Llama 3.1 8B</strong>.
+O <code>server.py</code> utiliza uma <strong>janela de contexto otimizada de 8192 tokens</strong> e <strong>chunking adaptativo</strong> para garantir estabilidade e performance.</li>
+<li>Se você for bom, pode usar o <a href="https://huggingface.co/">Hugging Face</a> para obter modelos fodásticos.</li>
+</ul>
+<h2 id="como-obter-o-titier">Como Obter o Titier</h2>
+<h3 id="op%C3%A7%C3%A3o-1-download-do-execut%C3%A1vel-recomendado">Opção 1: Download do Executável (Recomendado)</h3>
+<p>Você pode baixar as versões mais recentes prontas para uso na página de <strong><a href="https://github.com/matheusdanoite/Titier/releases">Releases do GitHub</a></strong>. Temos instaladores para:</p>
+<ul>
+<li><strong>Windows</strong>: <code>.exe</code> (Suporta NVIDIA CUDA)</li>
+<li><strong>macOS</strong>: <code>.dmg</code> (Nativo para Apple Silicon)</li>
+</ul>
+<h3 id="op%C3%A7%C3%A3o-2-compila%C3%A7%C3%A3o-manual">Opção 2: Compilação Manual</h3>
+<p>Se você deseja compilar o projeto do zero, siga as instruções abaixo:</p>
+<h4 id="pr%C3%A9-requisitos">Pré-requisitos</h4>
+<p>Antes de começar, certifique-se de ter instalado:</p>
+<ol>
+<li><strong>Node.js</strong> (v18 ou superior)</li>
+<li><strong>Python</strong> (v3.11 recomendado)</li>
+<li><strong>Rust</strong> (Latest stable)</li>
+<li><strong>Poetry</strong> (Gerenciador de dependências Python)<pre class="hljs"><code><div>pip install poetry
+</div></code></pre>
+</li>
+<li><strong>Compiladores C++:</strong>
+<ul>
+<li><strong>macOS:</strong> Xcode Command Line Tools (<code>xcode-select --install</code>)</li>
+<li><strong>Windows:</strong> Visual Studio com &quot;Desktop development with C++&quot;</li>
+</ul>
+</li>
+</ol>
+<h4 id="instala%C3%A7%C3%A3o-e-execu%C3%A7%C3%A3o-desenvolvimento">Instalação e Execução (Desenvolvimento)</h4>
+<p>Siga os passos abaixo para rodar o projeto localmente.</p>
+<h5 id="1-backend-python">1. Backend (Python)</h5>
+<p>Configuração do servidor de IA e API.</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># 1. Navegue até a pasta do projeto</span>
+<span class="hljs-built_in">cd</span> titier
+
+<span class="hljs-comment"># 2. Instale as dependências com Poetry</span>
+poetry install
+
+<span class="hljs-comment"># 3. Configure a aceleração de hardware (Metal/CUDA)</span>
+<span class="hljs-comment"># Este script recompila o llama-cpp-python para sua GPU específica</span>
+chmod +x app/install.sh
+./app/install.sh
+</div></code></pre>
+<p><strong>Rodar o Backend:</strong></p>
+<pre class="hljs"><code><div>poetry run python -m app.server
+<span class="hljs-comment"># O servidor iniciará em http://127.0.0.1:8000</span>
+</div></code></pre>
+<h5 id="2-frontend-taurireact">2. Frontend (Tauri/React)</h5>
+<p>Interface gráfica do usuário.</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># 1. Navegue para a pasta frontend</span>
+<span class="hljs-built_in">cd</span> frontend
+
+<span class="hljs-comment"># 2. Instale as dependências</span>
+npm install
+
+<span class="hljs-comment"># 3. Inicie o modo de desenvolvimento</span>
+npm run tauri dev
+</div></code></pre>
+<p>O aplicativo abrirá em uma janela nativa.</p>
+<h4 id="build-para-produ%C3%A7%C3%A3o">Build para Produção</h4>
+<p>Para gerar o executável final (<code>.app</code> ou <code>.exe</code>).</p>
+<h5 id="1-compilar-o-backend-sidecar">1. Compilar o Backend (Sidecar)</h5>
+<p>O Tauri precisa de um executável do Python para empacotar junto. Usamos o PyInstaller.</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># Na raiz do projeto</span>
+<span class="hljs-built_in">cd</span> app
+poetry run pyinstaller server.py \
+  --name titier-backend \
+  --onefile \
+  --paths . \
+  --collect-all llama_cpp \
+  --collect-all sentence_transformers \
+  --collect-all qdrant_client
+</div></code></pre>
+<p><em>Nota: Mova o executável gerado em <code>dist/titier-backend</code> para <code>frontend/src-tauri/sidecars/</code> renomeando-o conforme a arquitetura (ex: <code>titier-backend-aarch64-apple-darwin</code>).</em></p>
+<h5 id="2-compilar-o-app-tauri">2. Compilar o App Tauri</h5>
+<pre class="hljs"><code><div><span class="hljs-built_in">cd</span> frontend
+npm run tauri build
+</div></code></pre>
+<h5 id="3-instalar">3. Instalar</h5>
+<p>O instalador estará em <code>frontend/src-tauri/target/release/bundle</code>.</p>
+<h5 id="4-estudar">4. Estudar</h5>
+<p>De que adianta ser bonita e não ser inteligente?</p>
+<h2 id="estrutura-do-projeto">Estrutura do Projeto</h2>
+<pre class="hljs"><code><div>Titier/
+├── app/                 # Backend Python (FastAPI + IA)
+│   ├── core/            # Lógica de IA (Inferência, Hardware, OCR, PDF)
+│   ├── db/              # Banco de Vetores (Qdrant)
+│   ├── server.py        # Entry point da API
+│   ├── install.sh       # Script de setup de ambiente
+│   └── pyproject.toml   # Configuração e dependências Python (Poetry)
+├── frontend/            # Frontend (Tauri + React)
+│   ├── src/             # Código React
+│   └── src-tauri/       # Configuração Rust/Tauri
+├── scripts/             # Scripts de teste e verificação
+└── CHANGELOG.md         # Registro de alterações
+</div></code></pre>
+<h2 id="contribui%C3%A7%C3%A3o">Contribuição</h2>
+<ol>
+<li>Faça um Fork do projeto</li>
+<li>Crie uma Branch para sua Feature (<code>git checkout -b feature/metamorfose</code>)</li>
+<li>Commit suas mudanças (<code>git commit -m 'Uma metamorfose ambulante'</code>)</li>
+<li>Push para a Branch (<code>git push origin feature/metamorfose</code>)</li>
+<li>Abra um Pull Request</li>
+</ol>
+<hr>
+<p><em>Feito por matheusdanoite 🤝 com inputs de Cássio</em></p>
+
+</body>
+</html>

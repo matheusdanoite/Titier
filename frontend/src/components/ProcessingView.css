@@ -16,7 +16,7 @@
     left: -15%;
     width: 50%;
     height: 50%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--accent-rgb), 0.12) 0%, transparent 70%);
     filter: blur(80px);
     animation: proc-float-1 8s ease-in-out infinite;
 }
@@ -39,7 +39,7 @@
     transform: translate(-50%, -50%);
     width: 40%;
     height: 40%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+    background: radial-gradient(circle, rgba(var(--accent-rgb), 0.06) 0%, transparent 60%);
     filter: blur(60px);
     animation: proc-pulse 4s ease-in-out infinite;
 }
@@ -113,7 +113,7 @@
     width: 160px;
     height: 160px;
     animation: orbit 3s linear infinite;
-    border-top-color: rgba(99, 102, 241, 0.6);
+    border-top-color: rgba(var(--accent-rgb), 0.6);
 }
 
 .orbit-ring.ring-2 {
@@ -128,7 +128,7 @@
     width: 200px;
     height: 200px;
     animation: orbit 7s linear infinite;
-    border-top-color: rgba(99, 102, 241, 0.25);
+    border-top-color: rgba(var(--accent-rgb), 0.25);
 }
 
 .orbit-dot {
@@ -140,7 +140,7 @@
     height: 6px;
     background: var(--accent);
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(99, 102, 241, 0.8);
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.8);
 }
 
 .orbit-ring.ring-2 .orbit-dot {
@@ -149,8 +149,8 @@
 }
 
 .orbit-ring.ring-3 .orbit-dot {
-    background: rgba(99, 102, 241, 0.6);
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+    background: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
     width: 5px;
     height: 5px;
 }
@@ -188,10 +188,10 @@
     height: 3px;
     background: linear-gradient(90deg,
             transparent,
-            rgba(99, 102, 241, 0.8),
+            rgba(var(--accent-rgb), 0.8),
             rgba(139, 92, 246, 0.8),
             transparent);
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.6), 0 0 30px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.6), 0 0 30px rgba(var(--accent-rgb), 0.3);
     animation: scan 2s ease-in-out infinite;
 }
 

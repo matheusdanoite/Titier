@@ -57,6 +57,8 @@ class LLMEngine:
     
     DEFAULT_MODEL_DIR = Path.home() / ".titier" / "models"
     
+    _lock = None # Lock compartilhado para evitar múltiplas inferências simultâneas
+
     def __init__(
         self, 
         model_path: Optional[str] = None,
@@ -75,6 +77,11 @@ class LLMEngine:
         self.verbose = verbose
         self.llm = None
         self._backend_info = get_backend_info()
+
+        # Inicializar lock se ainda não existir
+        import asyncio
+        if LLMEngine._lock is None:
+            LLMEngine._lock = asyncio.Lock()
         
         # Detectar perfil de hardware otimizado
         self._hw_profile = detect_hardware_profile(model_path)
@@ -188,6 +195,9 @@ class LLMEngine:
         if not self.llm:
             raise RuntimeError("Modelo não carregado. Chame load() primeiro.")
         
+        # Síncrono não suporta lock assíncrono facilmente sem bloquear o loop
+        # Como o app é assíncrono, vamos usar o lock via run_in_executor ou similar se necessário
+        # Mas para simplicidade e segurança nas rotas async do FastAPI, vamos focar nos métodos async
         response = self.llm.create_completion(
             prompt=prompt,
             max_tokens=max_tokens,
@@ -212,6 +222,28 @@ class LLMEngine:
             max_tokens=max_tokens,
             temperature=temperature
         )
+        
+        return response["choices"][0]["message"]["content"]
+
+    async def chat_async(
+        self,
+        messages: list[dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> str:
+        """Chat completion assíncrono com lock."""
+        if not self.llm:
+            raise RuntimeError("Modelo não carregado. Chame load() primeiro.")
+        
+        import asyncio
+        async with self._lock:
+            # create_chat_completion do llama-cpp-python é bloqueante, 
+            # mas o lock evita concorrência.
+            response = self.llm.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
         
         return response["choices"][0]["message"]["content"]
     
@@ -239,7 +271,8 @@ class LLMEngine:
         self,
         messages: list[dict],
         max_tokens: int = 512,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        abort_check = None
     ) -> AsyncGenerator[str, None]:
         """Chat completion com streaming e contagem robusta de tokens."""
         if not self.llm:
@@ -270,15 +303,25 @@ class LLMEngine:
         
         print("[LLM] Iniciando geração...")
         try:
-            for chunk in self.llm.create_chat_completion(
-                messages=messages,
-                max_tokens=final_max_tokens,
-                temperature=temperature,
-                stream=True
-            ):
-                if "content" in chunk["choices"][0]["delta"]:
-                    token = chunk["choices"][0]["delta"]["content"]
-                    yield token
+            import asyncio
+            async with self._lock:
+                for chunk in self.llm.create_chat_completion(
+                    messages=messages,
+                    max_tokens=final_max_tokens,
+                    temperature=temperature,
+                    stream=True
+                ):
+                    if abort_check and abort_check():
+                        break
+                    
+                    if "content" in chunk["choices"][0]["delta"]:
+                        token = chunk["choices"][0]["delta"]["content"]
+                        yield token
+                    
+                    # Permitir que outras corrotinas rodem (ex: /chat/stop)
+                    await asyncio.sleep(0)
+            
+            print("[LLM] Geração finalizada com sucesso.")
         except RuntimeError as e:
             if "-3" in str(e) or "llama_decode" in str(e):
                 print(f"[LLM] Erro crítico de decodificação capturado: {e}")
