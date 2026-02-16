@@ -1,125 +1,106 @@
 # Titier
 
-![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-warning)
-![License](https://img.shields.io/badge/License-MIT-blue)
-![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Tauri](https://img.shields.io/badge/Tauri-2.0-orange)
-![React](https://img.shields.io/badge/React-19-blue)
+[Português Brasileiro](README.pt-br.md)
 
-"Então você usa o NotebookLM", disse um amigo quando eu contei o próposito deste software, que nasceu da necessidade do meu amigo Cássio: um editor de PDF para que ele pudesse ler e fazer anotações, mas com uma IA integrada para deixar os textos de uma graduação de ciências humanas muito mais digeríveis. Menos para um NotebookLM e mais para um Acrobat Reader com a IA da Adobe, talvez. É verdade, poderia usar qualquer um desses dois, mas o Cássio também tem um PC foderoso. Pensando em extrair o máximo do poder computacional com algo que não fosse League of Legends, decidimos entrar nessa jornada de criação do Titier.
+"Why don't you use NotebookLM?" asked a friend when I told him the purpose of this software, which was born from my friend Cássio's need: a PDF editor so he could read and make notes, but with an integrated AI to make texts from a humanities degree much more digestible. Less like a NotebookLM and more like an Acrobat Reader with Adobe AI, perhaps. True, he could use either of those, but Cássio also has a powerful PC. Thinking of extracting the maximum computational power with something other than League of Legends, we decided to embark on this journey of creating Titier.
 
-**O Titier é um assistente de estudos impulsionado por IA que funciona de forma 100% local e privada.** 
+**Titier is an AI-powered study assistant that works 100% locally and privately.**
 
-Privacidade é prioridade para o Titier. Os dados do seu PDF não saem do seu dispositivo; nenhum tipo de dado sai, na verdade. A IA roda localmente de maneira profundamente integrada à máquina, utilizando muitos recursos, é verdade, mas é legal para quem gosta de puxar o hardware ao seu limite.
+Privacy is a priority for Titier. Your PDF data does not leave your device; no data leaves, in fact. The AI runs locally, deeply integrated into the machine, using many resources, true, but it's cool for those who like to push their hardware to the limit.
 
-O Titier aceita modelos em formato GGUF para a inferência de texto, e o PaddleOCR é usado para reconhecimento de caracteres em PDFs com imagens (ou escaneados). Isso significa que você pode utilizar o modelo que você quiser, e sua máquina aceitar, para realizar o processo de inferência.
+Titier accepts models in GGUF format for text inference, and PaddleOCR is used for character recognition in PDFs with images (or scanned). This means you can use whatever model you want, and your machine accepts, to perform the inference process.
 
-## Como funciona o Titier
+## How Titier Works
+When uploading a PDF file, a check is performed on its content: if there is pure text, if there are images, if there are annotations and highlights, as well as their respective colors. If there are images, PaddleOCR is used to extract text from the images. Both text extracted from images and pure text from better-formatted PDFs are indexed and stored locally. Annotations of the same colors are kept in a single context, that is, Titier understands that these highlighted excerpts have related content. You can ask "what is highlighted in yellow?" and Titier answers.
 
-Ao enviar um arquivo PDF, é realizada uma verificação do seu conteúdo: se há texto puro, se há imagens, se há anotações e se há trechos destacados, bem como suas respectivas cores. Se houver imagens, o PaddleOCR é utilizado para extrair o texto das imagens. Tanto o texto extraído de imagens quanto o texto puro de PDFs mais bem formatados são indexados e armazenados localmente. Anotações de mesmas cores são mantidas em um só contexto, isto é, o Titier entende que estes trechos grifados possuem conteúdo relacionado. Você pode perguntar "o que está grifado em amarelo?" e o Titier responde.
+## Features
+- **100% Local (Total Privacy):** Your documents and conversations never leave your computer.
+- **Multimodal AI:** Understands text, tables, charts, and handwritten notes.
+- **RAG (Retrieval-Augmented Generation):** Answers based on the content of your PDFs.
+- **Multi-Session Chat:** Manage multiple simultaneous conversations with independent contexts.
+- **Real-Time Streaming:** Answers displayed token by token for instant feedback.
+- **Structured Auto-Summary:** Upon opening a PDF, Titier generates a complete summary with overview, key points, detailed summary, and conclusions.
+- **Highlight Extraction:** Captures highlighted texts, their colors, and notes; each color generates a new "topic" within the PDF and its content is prioritized in answers.
+- **Beautiful Interface:** Ugly software, excuse me, but aesthetics are fundamental.
+- **Customizable Prompts:** Customize system prompts directly through Settings to adapt Titier to your study style.
+- **Native & Intelligent Performance:** Optimized backend (Metal/CUDA) that self-configures based on your hardware.
+- **Optimized for MacBook Air M1 8GB:** Specific settings to ensure Titier runs on my humble Mac.
 
-## Funcionalidades
-- **100% Local (Privacidade Total):** Seus documentos e conversas nunca saem do seu computador.
-- **IA Multimodal:** Entende texto, tabelas, gráficos e anotações manuscritas.
-- **RAG (Retrieval-Augmented Generation):** Respostas baseadas no conteúdo dos seus PDFs.
-- **Chat Multi-Sessão:** Gerencie múltiplas conversas simultâneas com contextos independentes.
-- **Streaming em Tempo Real:** Respostas exibidas token a token para feedback instantâneo.
-- **Resumo Automático Estruturado:** Ao abrir um PDF, o Titier gera um resumo completo com visão geral, pontos-chave, resumo detalhado e conclusões.
-- **Extração de Destaques:** Captura textos grifados, suas cores e anotações; cada cor gera um novo "assunto" dentro do PDF e seu conteúdo é priorizado nas respostas.
-- **Interface Bonita:** Softwares feios que me desculpem, mas estética é fundamental.
-- **Prompts Customizáveis:** Personalize os prompts de sistema diretamente pelas Configurações para adaptar o Titier ao seu estilo de estudo.
-- **Performance Nativa & Inteligente:** Backend otimizado (Metal/CUDA) que se auto-configura baseado no seu hardware.
-- **Otimizado para MacBook Air M1 8GB:** Configurações específicas para garantir que o Titier rode no meu singelo Mac.
-
-## Tecnologias
-
-- **Backend:** Python 3.11, FastAPI, Qdrant (Vetores), PyMuPDF.
-- **AI Engine:** `llama-cpp-python` para visão e linguagem, `PaddleOCR-VL-1.5` (Vision OCR) e `rapidocr-onnxruntime`.
+## Technologies
+- **Backend:** Python 3.11, FastAPI, Qdrant (Vectors), PyMuPDF.
+- **AI Engine:** `llama-cpp-python` for vision and language, `PaddleOCR-VL-1.5` (Vision OCR) and `rapidocr-onnxruntime`.
 - **Frontend:** Tauri v2, React, TypeScript, Vite.
-- **Modelos de IA:** O Titier é inteligente o suficiente para recomendar o melhor modelo para seu PC:
-  - **MacBook Air M1 (8GB)**: Recomendamos o **Llama 3.2 3B** para conseguir rodar algo.
-  - **Hardware Superior**: O sistema sugerirá modelos maiores como **Llama 3.1 8B**.O `server.py` utiliza uma **janela de contexto otimizada de 8192 tokens** e **chunking adaptativo** para garantir estabilidade e performance.
-  - Se você for bom, pode usar o [Hugging Face](https://huggingface.co/) para obter modelos fodásticos e otimizados para seu uso.
+- **AI Models:** Titier is smart enough to recommend the best model for your PC:
+  - **MacBook Air M1 (8GB)**: We recommend **Llama 3.2 3B** to manage running something.
+  - **Superior Hardware**: The system will suggest larger models like **Llama 3.1 8B**. `server.py` uses an **optimized context window of 8192 tokens** and **adaptive chunking** to ensure stability and performance.
+  - If you're good, you can use [Hugging Face](https://huggingface.co/) to get awesome models optimized for your use.
 
-## Como Obter o Titier
+## How to Get Titier
+### Option 1: Download Executable (Recommended)
+You can download the latest ready-to-use versions on the **[GitHub Releases](https://github.com/matheusdanoite/Titier/releases)** page. We (will) have installers for:
+- **Windows**: `.exe` (Supports NVIDIA CUDA)
+- **macOS**: `.dmg` (Native for Apple Silicon)
 
-### Opção 1: Download do Executável (Recomendado)
-Você pode baixar as versões mais recentes prontas para uso na página de **[Releases do GitHub](https://github.com/matheusdanoite/Titier/releases)**. Temos instaladores para:
-- **Windows**: `.exe` (Suporta NVIDIA CUDA)
-- **macOS**: `.dmg` (Nativo para Apple Silicon)
+### Option 2: Manual Compilation
+If you wish to compile the project from scratch, follow the instructions below:
 
-### Opção 2: Compilação Manual
-Se você deseja compilar o projeto do zero, siga as instruções abaixo:
-
-#### Pré-requisitos
-
-Antes de começar, certifique-se de ter instalado:
-
-1.  **Node.js** (v18 ou superior)
-2.  **Python** (v3.11 recomendado)
+#### Prerequisites
+Before starting, make sure you have installed:
+1.  **Node.js** (v18 or higher)
+2.  **Python** (v3.11 recommended)
 3.  **Rust** (Latest stable)
-4.  **Poetry** (Gerenciador de dependências Python)
+4.  **Poetry** (Python dependency manager)
     ```bash
     pip install poetry
     ```
-5.  **Compiladores C++:**
+5.  **C++ Compilers:**
     - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
-    - **Windows:** Visual Studio com "Desktop development with C++"
+    - **Windows:** Visual Studio with "Desktop development with C++"
 
-#### Instalação e Execução (Desenvolvimento)
-
-Siga os passos abaixo para rodar o projeto localmente.
+#### Installation and Execution (Development)
+Follow the steps below to run the project locally.
 
 ##### 1. Backend (Python)
-
-Configuração do servidor de IA e API.
-
+AI server and API configuration.
 ```bash
-# 1. Navegue até a pasta do projeto
+# 1. Navigate to the project folder
 cd titier
 
-# 2. Instale as dependências com Poetry
+# 2. Install dependencies with Poetry
 poetry install
 
-# 3. Configure a aceleração de hardware (Metal/CUDA)
-# Este script recompila o llama-cpp-python para sua GPU específica
+# 3. Configure hardware acceleration (Metal/CUDA)
+# This script recompiles llama-cpp-python for your specific GPU
 chmod +x app/install.sh
 ./app/install.sh
 ```
-
-Rodar o Backend:
+Run the Backend:
 ```bash
 poetry run python -m app.server
-# O servidor iniciará em http://127.0.0.1:8000
+# The server will start at http://127.0.0.1:8000
 ```
 
 ##### 2. Frontend (Tauri/React)
-
-Interface gráfica do usuário.
-
+Graphical User Interface.
 ```bash
-# 1. Navegue para a pasta frontend
+# 1. Navigate to the frontend folder
 cd frontend
 
-# 2. Instale as dependências
+# 2. Install dependencies
 npm install
 
-# 3. Inicie o modo de desenvolvimento
+# 3. Start development mode
 npm run tauri dev
 ```
+The application will open in a native window.
 
-O aplicativo abrirá em uma janela nativa.
+#### Build for Production
+To generate the final executable (`.app` or `.exe`).
 
-#### Build para Produção
-
-Para gerar o executável final (`.app` ou `.exe`).
-
-##### 1. Compilar o Backend (Sidecar)
-
-O Tauri precisa de um executável do Python para empacotar junto. Usamos o PyInstaller.
-
+##### 1. Compile the Backend (Sidecar)
+Tauri needs a Python executable to package along. We use PyInstaller.
 ```bash
-# Na raiz do projeto
+# In the project root
 cd app
 poetry run pyinstaller server.py \
   --name titier-backend \
@@ -129,49 +110,42 @@ poetry run pyinstaller server.py \
   --collect-all sentence_transformers \
   --collect-all qdrant_client
 ```
+*Note: Move the generated executable in `dist/titier-backend` to `frontend/src-tauri/sidecars/` renaming it according to the architecture (e.g., `titier-backend-aarch64-apple-darwin` for Macs with Apple Silicon).*
 
-*Nota: Mova o executável gerado em `dist/titier-backend` para `frontend/src-tauri/sidecars/` renomeando-o conforme a arquitetura (ex: `titier-backend-aarch64-apple-darwin` para Macs com Apple Silicon).*
-
-##### 2. Compilar o App Tauri
-
+##### 2. Compile the Tauri App
 ```bash
 cd frontend
 npm run tauri build
 ```
 
-##### 3. Instalar
+##### 3. Install
+The installer will be in `frontend/src-tauri/target/release/bundle`.
 
-O instalador estará em `frontend/src-tauri/target/release/bundle`.
+##### 4. Study
+What's the point of being beautiful and not smart?
 
-##### 4. Estudar
-
-De que adianta ser bonita e não ser inteligente?
-
-## Estrutura do Projeto
-
+## Project Structure
 ```
 Titier/
-├── app/                 # Backend Python (FastAPI + IA)
-│   ├── core/            # Lógica de IA (Inferência, Hardware, OCR, PDF)
-│   ├── db/              # Banco de Vetores (Qdrant)
-│   ├── server.py        # Entry point da API
-│   ├── install.sh       # Script de setup de ambiente
-│   └── pyproject.toml   # Configuração e dependências Python (Poetry)
+├── app/                 # Python Backend (FastAPI + AI)
+│   ├── core/            # AI Logic (Inference, Hardware, OCR, PDF)
+│   ├── db/              # Vector Database (Qdrant)
+│   ├── server.py        # API Entry point
+│   ├── install.sh       # Environment setup script
+│   └── pyproject.toml   # Python configuration and dependencies (Poetry)
 ├── frontend/            # Frontend (Tauri + React)
-│   ├── src/             # Código React
-│   └── src-tauri/       # Configuração Rust/Tauri
-├── scripts/             # Scripts de teste e verificação
-└── CHANGELOG.md         # Registro de alterações
+│   ├── src/             # React Code
+│   └── src-tauri/       # Rust/Tauri Configuration
+├── scripts/             # Test and verification scripts
+└── CHANGELOG.md         # Change log
 ```
 
-## Contribuição
+## Contributing
 
-1.  Faça um Fork do projeto
-2.  Crie uma Branch para sua Feature (`git checkout -b feature/metamorfose`)
-3.  Commit suas mudanças (`git commit -m 'Uma metamorfose ambulante'`)
-4.  Push para a Branch (`git push origin feature/metamorfose`)
-5.  Abra um Pull Request
+1.  Fork the project
+2.  Create a Branch for your Feature (`git checkout -b feature/metamorphosis`)
+3.  Commit your changes (`git commit -m 'A walking metamorphosis'`)
+4.  Push to the Branch (`git push origin feature/metamorphosis`)
+5.  Open a Pull Request
 
----
-
-*Feito por matheusdanoite 🤝 com inputs de Cássio*
+*Made by matheusdanoite 🤝 with inputs from Cássio*

@@ -1,158 +1,153 @@
-# Registro de Alterações (Changelog)
-
-Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
-
-O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
-e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/spec/v2.0.0.html).
+# Changelog
 
 ## [0.5.1] - 2026-02-09
 
-### Removido
+### Removed
 
-#### Código Morto (Backend)
-- **`app/main.py`:** Protótipo inicial que importava classes inexistentes (`InferenceEngine`). Substituído por `server.py`.
-- **`app/core/agent.py`:** `StudyAgent` com LlamaIndex Agent — nunca utilizado pelo servidor principal.
-- **`app/download_mmproj.py`:** Script standalone de download substituído pelo `ModelManager`.
-- **`app/utils/downloader.py`:** Módulo de download legado, usado apenas pelo `main.py` (morto). Diretório `app/utils/` removido.
-- **`app/test_header_footer.pdf`:** PDF de teste esquecido na raiz do backend.
+#### Dead Code (Backend)
+- **`app/main.py`:** Initial prototype that imported non-existent classes (`InferenceEngine`). Replaced by `server.py`.
+- **`app/core/agent.py`:** `StudyAgent` with LlamaIndex Agent — never used by the main server.
+- **`app/download_mmproj.py`:** Standalone download script replaced by `ModelManager`.
+- **`app/utils/downloader.py`:** Legacy download module, used only by `main.py` (dead). `app/utils/` directory removed.
+- **`app/test_header_footer.pdf`:** Test PDF forgotten in the backend root.
 
-#### Dependências Não Utilizadas (Backend)
-- **`llama-index`**, **`llama-index-llms-llama-cpp`**, **`llama-index-embeddings-huggingface`**, **`llama-index-vector-stores-qdrant`**, **`llama-index-tools-google`:** 5 pacotes removidos do `pyproject.toml` — eram utilizados apenas no código morto (`agent.py` e `main.py`).
-- **`requirements.txt`:** Arquivo duplicado removido — `pyproject.toml` (Poetry) é a fonte oficial de dependências.
+#### Unused Dependencies (Backend)
+- **`llama-index`**, **`llama-index-llms-llama-cpp`**, **`llama-index-embeddings-huggingface`**, **`llama-index-vector-stores-qdrant`**, **`llama-index-tools-google`:** 5 packages removed from `pyproject.toml` — were used only in dead code (`agent.py` and `main.py`).
+- **`requirements.txt`:** Duplicate file removed — `pyproject.toml` (Poetry) is the official source of dependencies.
 
-#### Dependências Não Utilizadas (Frontend)
-- **`@radix-ui/react-dialog`:** Nunca importado em nenhum componente `.tsx`.
-- **`@tauri-apps/plugin-opener`:** Nunca importado em nenhum componente `.tsx`.
+#### Unused Dependencies (Frontend)
+- **`@radix-ui/react-dialog`:** Never imported in any `.tsx` component.
+- **`@tauri-apps/plugin-opener`:** Never imported in any `.tsx` component.
 
-#### Documentação Desatualizada
-- **`Pano de Implementação Frontend.md`**, **`Plano de Implementação Backend.md`**, **`Walkthrough 1.md`:** Planos e walkthroughs do projeto inicial removidos — a estrutura do projeto já divergiu significativamente.
+#### Outdated Documentation
+- **`Pano de Implementação Frontend.md`**, **`Plano de Implementação Backend.md`**, **`Walkthrough 1.md`:** Initial project plans and walkthroughs removed — the project structure has diverged significantly.
 
-#### Limpeza Estrutural
-- Diretórios vazios na raiz removidos: `db/`, `data/`, `models/`.
+#### Structural Cleanup
+- Empty directories in root removed: `db/`, `data/`, `models/`.
 
-### Corrigido
-- **Versão da API:** Corrigido `server.py` de `0.2.0` para `0.5.0` para sincronizar com `pyproject.toml` e `package.json`.
+### Fixed
+- **API Version:** Fixed `server.py` from `0.2.0` to `0.5.0` to synchronize with `pyproject.toml` and `package.json`.
 
 ---
 
 ## [0.5.0] - 2026-02-09
 
-### Adicionado
+### Added
 
-#### Interface & Experiência do Usuário
-- **Tela de Estado Vazio (`EmptyState`):** Nova visualização full-screen quando nenhum PDF está carregado, com ícone de upload, texto destacado, suporte a drag-and-drop, e atalho para configurações.
-- **Tela de Processamento (`ProcessingView`):** Animação premium exibida durante a análise de documentos, com anéis orbitais, efeito de varredura (scan line), barra de progresso shimmer, e status em tempo real.
-- **Customização de System Prompts:** Nova aba "Prompts" nas Configurações, permitindo ao usuário personalizar os prompts de sistema (RAG, Base, Visão) com restauração de padrões.
-- **Resumo Automático Estruturado:** Ao abrir um PDF, o Titier gera automaticamente um resumo com seções: Visão Geral, Pontos-Chave, Resumo Detalhado, e Conclusões.
+#### User Interface & Experience
+- **Empty State Screen (`EmptyState`):** New full-screen view when no PDF is loaded, with upload icon, highlighted text, drag-and-drop support, and shortcut to settings.
+- **Processing Screen (`ProcessingView`):** Premium animation displayed during document analysis, with orbital rings, scan line effect, shimmer progress bar, and real-time status.
+- **System Prompt Customization:** New "Prompts" tab in Settings, allowing the user to customize system prompts (RAG, Base, Vision) with default restoration.
+- **Structured Auto-Summary:** Upon opening a PDF, Titier automatically generates a summary with sections: Overview, Key Points, Detailed Summary, and Conclusions.
 
-#### Processamento de Documentos
-- **Extração de Destaques (Highlights):** Novo sistema que captura textos grifados, suas cores (amarelo, verde, azul, etc.) e anotações associadas dos PDFs.
-- **Filtro por Cor de Destaque:** Consultas podem ser filtradas por cor de grifo (ex: "o que está grifado em amarelo?") com detecção automática de intenção.
-- **Integração PaddleOCR-VL-1.5:** Motor de OCR visual avançado para extração de tabelas, layouts complexos e PDFs escaneados.
-- **OCR Híbrido com Fallback:** Prioridade automática para VisionOCR (PaddleOCR), com fallback transparente para RapidOCR (CPU otimizado).
-- **Limpeza de Texto e Remoção de Cabeçalhos/Rodapés:** Sistema heurístico no PyMuPDF para identificar e ignorar elementos repetitivos em múltiplas páginas.
-- **Filtragem por Margem:** Suporte para ignorar áreas específicas da página durante a extração de texto.
-- **Ordenação Inteligente de Blocos:** Extração de texto respeita a ordem natural de leitura (Y, depois X), melhorando a coerência em documentos com colunas.
-- **Logs de Progresso de OCR:** Acompanhamento em tempo real no terminal (`Página X/Y`, tempo por página e tempo total).
+#### Document Processing
+- **Highlight Extraction:** New system that captures highlighted texts, their colors (yellow, green, blue, etc.), and associated notes from PDFs.
+- **Highlight Color Filter:** Queries can be filtered by highlight color (e.g., "what is highlighted in yellow?") with automatic intent detection.
+- **PaddleOCR-VL-1.5 Integration:** Advanced visual OCR engine for table extraction, complex layouts, and scanned PDFs.
+- **Hybrid OCR with Fallback:** Automatic priority for VisionOCR (PaddleOCR), with transparent fallback to RapidOCR (optimized CPU).
+- **Text Cleaning and Header/Footer Removal:** Heuristic system in PyMuPDF to identify and ignore repetitive elements across multiple pages.
+- **Margin Filtering:** Support for ignoring specific page areas during text extraction.
+- **Smart Block Sorting:** Text extraction respects the natural reading order (Y, then X), improving coherence in multi-column documents.
+- **OCR Progress Logs:** Real-time tracking in the terminal (`Page X/Y`, time per page, and total time).
 
-#### Backend & Otimização
-- **Detecção Dinâmica de Hardware:** Módulo `hardware.py` que detecta automaticamente RAM, VRAM (Metal/CUDA), e CPU cores.
-- **Perfis de Hardware Automáticos:** Sistema classifica hardware em 4 tiers (LOW/MEDIUM/HIGH/ULTRA) com parâmetros otimizados.
-- **Smart Layer Offloading:** `n_gpu_layers` calculado dinamicamente baseado na VRAM disponível.
-- **KV Cache Quantizado:** Tiers HIGH/ULTRA usam cache Q8_0 para reduzir uso de VRAM.
-- **Flash Attention:** Habilitado automaticamente quando disponível.
-- **Endpoint `/api/hardware`:** Expõe informações detalhadas do hardware e configurações calculadas.
-- **Endpoints de Status OCR:** `/ocr/vision/status` e `/ocr/status` para monitoramento dos motores de OCR.
-- **Chunking Adaptativo (Hardware-Aware):** Tamanho dos chunks escala com o hardware (100 a 300 palavras).
-- **Otimização para Macs de 8GB (M1/M2):** Recomendação automática do Llama 3.2 3B.
+#### Backend & Optimization
+- **Dynamic Hardware Detection:** `hardware.py` module that automatically detects RAM, VRAM (Metal/CUDA), and CPU cores.
+- **Automatic Hardware Profiles:** System classifies hardware into 4 tiers (LOW/MEDIUM/HIGH/ULTRA) with optimized parameters.
+- **Smart Layer Offloading:** `n_gpu_layers` calculated dynamically based on available VRAM.
+- **Quantized KV Cache:** HIGH/ULTRA tiers use Q8_0 cache to reduce VRAM usage.
+- **Flash Attention:** Automatically enabled when available.
+- **`/api/hardware` Endpoint:** Exposes detailed hardware information and calculated settings.
+- **OCR Status Endpoints:** `/ocr/vision/status` and `/ocr/status` for monitoring OCR engines.
+- **Adaptive Chunking (Hardware-Aware):** Chunk size scales with hardware (100 to 300 words).
+- **Optimization for 8GB Macs (M1/M2):** Automatic recommendation of Llama 3.2 3B.
 
-### Alterado
-- **Prompts RAG Refinados:** Novas diretrizes incluem preservação de termos técnicos, organização hierárquica, e captura de nuances ao resumir.
-- **Motor de Visão Padrão:** Substituído MiniCPM-V por PaddleOCR-VL-1.5 para melhor compatibilidade.
-- **`n_ctx` Dinâmico:** Janela de contexto calculada automaticamente (2K-16K+) baseada na memória disponível.
-- **`n_batch` Otimizado:** Valor ajustado por tier (128-1024) para melhor throughput.
-- **Threading Inteligente:** `n_threads` e `n_threads_batch` configurados baseado nos cores da CPU.
-- **LLMEngine Refatorado:** Aceita parâmetros opcionais e usa valores auto-detectados como padrão.
-- **Limite Dinâmico de RAG:** O número de chunks recuperados é ajustado automaticamente pelo tamanho da janela de contexto do modelo (2 a 20 chunks).
+### Changed
+- **Refined RAG Prompts:** New guidelines include preservation of technical terms, hierarchical organization, and capturing nuances when summarizing.
+- **Default Vision Engine:** Replaced MiniCPM-V with PaddleOCR-VL-1.5 for better compatibility.
+- **Dynamic `n_ctx`:** Context window calculated automatically (2K-16K+) based on available memory.
+- **Optimized `n_batch`:** Value adjusted by tier (128-1024) for better throughput.
+- **Smart Threading:** `n_threads` and `n_threads_batch` configured based on CPU cores.
+- **Refactored LLMEngine:** Accepts optional parameters and uses auto-detected values as default.
+- **Dynamic RAG Limit:** The number of retrieved chunks is automatically adjusted by the model's context window size (2 to 20 chunks).
 
-### Corrigido
-- **Processamento de PDFs Escaneados:** Corrigido bug onde arquivos sem camada de texto falhavam na extração.
-- **Download de Modelos Non-GGUF:** Corrigido erro `KeyError: 'filename'` ao baixar modelos de hubs externos.
-- **Compatibilidade NumPy:** Downgrade automático para NumPy < 2.0 para compatibilidade com PaddleOCR.
-- **Progresso de Download:** Corrigido bug onde a UI ficava travada em 0% — agora monitora recursivamente diretórios de cache.
-- **Suporte GPU (Metal/CUDA):** Corrigido reporte incorreto do backend de GPU no frontend.
-- Uso excessivo de VRAM em modelos grandes evitado via offload automático para RAM.
+### Fixed
+- **Scanned PDF Processing:** Fixed bug where files without a text layer failed extraction.
+- **Non-GGUF Model Download:** Fixed `KeyError: 'filename'` error when downloading models from external hubs.
+- **NumPy Compatibility:** Automatic downgrade to NumPy < 2.0 for compatibility with PaddleOCR.
+- **Download Progress:** Fixed bug where UI stuck at 0% — now recursively monitors cache directories.
+- **GPU Support (Metal/CUDA):** Fixed incorrect GPU backend reporting in frontend.
+- Excessive VRAM usage in large models avoided via automatic offload to RAM.
 
 ---
 
 ## [0.4.0] - 2026-02-09
 
-### Adicionado
-- **Chat Multi-Sessão:** Suporte a múltiplas conversas simultâneas com contextos independentes.
-- **Streaming de Tokens:** Respostas da LLM são exibidas token a token em tempo real.
-- **Componente `ChatSession.tsx`:** Novo componente encapsulado para gerenciamento de sessões de chat individuais.
-- **Componente `SidebarMenu.tsx`:** Menu lateral para criar, selecionar e excluir sessões de chat.
-- **Endpoint `/chat/stream`:** Nova API de streaming via Server-Sent Events (SSE).
-- **Gestão Dinâmica de Contexto:** O sistema calcula automaticamente os tokens disponíveis e ajusta `max_tokens` para evitar estouro de memória.
-- **ErrorBoundary:** Tratamento global de erros no frontend para evitar travamentos.
+### Added
+- **Multi-Session Chat:** Support for multiple simultaneous conversations with independent contexts.
+- **Token Streaming:** LLM responses are displayed token by token in real-time.
+- **`ChatSession.tsx` Component:** New encapsulated component for managing individual chat sessions.
+- **`SidebarMenu.tsx` Component:** Sidebar menu to create, select, and delete chat sessions.
+- **`/chat/stream` Endpoint:** New streaming API via Server-Sent Events (SSE).
+- **Dynamic Context Management:** System automatically calculates available tokens and adjusts `max_tokens` to prevent memory overflow.
+- **ErrorBoundary:** Global error handling in frontend to prevent crashes.
 
-### Alterado
-- **Janela de Contexto Otimizada:** `n_ctx` definido para 8192 tokens (estável para hardware local).
-- **RAG Otimizado:** 
-  - Tamanho de chunks reduzido de 500 para 200 palavras.
-  - Overlap reduzido de 50 para 30 palavras.
-  - Limite de recuperação reduzido de 5 para 3 chunks.
-- **`max_tokens` padrão:** Aumentado para 4096 tokens para respostas mais completas.
-- **Refatoração de `App.tsx`:** Arquitetura de estado para suportar múltiplas sessões ativas.
+### Changed
+- **Optimized Context Window:** `n_ctx` set to 8192 tokens (stable for local hardware).
+- **Optimized RAG:** 
+  - Chunk size reduced from 500 to 200 words.
+  - Overlap reduced from 50 to 30 words.
+  - Retrieval limit reduced from 5 to 3 chunks.
+- **Default `max_tokens`:** Increased to 4096 tokens for more complete answers.
+- **`App.tsx` Refactoring:** State architecture to support multiple active sessions.
 
-### Corrigido
-- Erro `ValueError: Requested tokens exceed context window` ao processar documentos grandes.
-- Travamento do sistema ao tentar usar contexto completo do modelo (128k tokens).
-- Truncamento prematuro de respostas da LLM.
-- `ReferenceError: FileText` no frontend.
+### Fixed
+- `ValueError: Requested tokens exceed context window` error when processing large documents.
+- System crash when trying to use full model context (128k tokens).
+- Premature truncation of LLM responses.
+- `ReferenceError: FileText` in frontend.
 
 ---
 
 ## [0.3.0] - 2026-02-09
 
-### Adicionado
-- Integração dinâmica com Hugging Face Hub para descoberta de modelos.
-- Barra de busca dinâmica com debounce no fluxo de onboarding.
-- Filtro automático de hardware baseado na RAM do sistema.
-- Filtro de qualidade para excluir modelos menores que 3GB (experimental).
-- Links diretos para os repositórios oficiais no Hugging Face em cada card de modelo.
-- Sistema de cache dinâmico para modelos descobertos via busca.
-- Suporte a aceleração por hardware (Metal/CUDA) integrado ao workflow de release do GitHub Actions.
+### Added
+- Dynamic integration with Hugging Face Hub for model discovery.
+- Dynamic search bar with debounce in onboarding flow.
+- Automatic hardware filter based on system RAM.
+- Quality filter to exclude models smaller than 3GB (experimental).
+- Direct links to official repositories on Hugging Face in each model card.
+- Dynamic cache system for models discovered via search.
+- Hardware acceleration support (Metal/CUDA) integrated into GitHub Actions release workflow.
 
-### Alterado
-- Refinamento da UI dos cards de modelo com Flexbox para alinhamento consistente dos botões.
-- Descrições de modelos simplificadas para exibir apenas a contagem de downloads.
-- Aumento do limite de descoberta para 12 modelos simultâneos.
-- Melhoria no monitoramento de progresso de download para suportar arquivos temporários do `huggingface_hub`.
-- Consolidação de dependências do backend no `app/pyproject.toml` (incluindo `llama-cpp-python` e extensões do LlamaIndex).
+### Changed
+- Refined model card UI with Flexbox for consistent button alignment.
+- Simplified model descriptions to display only download count.
+- Increased discovery limit to 12 simultaneous models.
+- Improved download progress monitoring to support `huggingface_hub` temporary files.
+- Consolidated backend dependencies in `app/pyproject.toml` (including `llama-cpp-python` and LlamaIndex extensions).
 
-### Corrigido
-- Erro 404 ao tentar baixar modelos descobertos dinamicamente.
-- Erro no monitoramento de progresso que permanecia travado em 0% na interface.
-- Bug de importação (`NameError: os`) no ModelManager.
+### Fixed
+- 404 error when attempting to download dynamically discovered models.
+- Error in progress monitoring that remained stuck at 0% in interface.
+- Import bug (`NameError: os`) in ModelManager.
 
 ## [0.2.0] - 2026-02-09
 
-### Adicionado
-- Workflow de GitHub Actions para automação de releases (Windows e macOS).
+### Added
+- GitHub Actions workflow for release automation (Windows and macOS).
 
-### Alterado
-- Atualização da documentação no README.md.
+### Changed
+- Updated documentation in README.md.
 
 ## [0.1.0] - 2026-02-09
 
-### Adicionado
-- Lançamento inicial do **Titier**.
-- Suporte multiplataforma (macOS Metal, Windows CUDA).
-- RAG (Geração Aumentada por Recuperação) local com LlamaIndex e Qdrant.
-- Suporte a IA Multimodal usando análise de imagem e OCR.
-- Suporte a modelos apenas de texto (Llama 3.2, Phi-3, Mistral, Qwen2).
-- Pipeline de processamento de PDF com extração híbrida (PyMuPDF + Vision AI).
-- Interface de desktop nativa construída com Tauri v2 e React.
-- Sistema de gerenciamento de modelos para baixar e gerenciar modelos GGUF do Hugging Face.
-- Fluxo de integração (onboarding) para configuração inicial (verificação de GPU, download de modelo, inicialização de embeddings).
+### Added
+- Initial release of **Titier**.
+- Cross-platform support (macOS Metal, Windows CUDA).
+- Local RAG (Retrieval-Augmented Generation) with LlamaIndex and Qdrant.
+- Multimodal AI support using image analysis and OCR.
+- Text-only model support (Llama 3.2, Phi-3, Mistral, Qwen2).
+- PDF processing pipeline with hybrid extraction (PyMuPDF + Vision AI).
+- Native desktop interface built with Tauri v2 and React.
+- Model management system to download and manage GGUF models from Hugging Face.
+- Onboarding flow for initial configuration (GPU check, model download, embeddings initialization).
